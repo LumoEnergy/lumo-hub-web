@@ -1,0 +1,11 @@
+{
+  "projects": {},
+  "targets": {
+    "lumo-dev-optimizer": {
+      "hosting": {
+        "hub-demo-dev": ["lumo-hub-demo-dev-opt"]
+      }
+    }
+  },
+  "etags": {}
+}
