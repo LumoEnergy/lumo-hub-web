@@ -99,17 +99,23 @@ export function resolveCustomerState(position: TrackPosition, asOf: string): Res
     };
   }
 
-  // 2. Before there is an account, the invite explains why. "Email bounced" and "no
-  //    response after six weeks" are both more actionable than "hasn't signed up
-  //    yet", and they imply completely different next steps.
-  if (activation === 'no_account' && inviteDef.disposition === 'blocked') {
+  // 2. Before there is an account the invite is the whole story, and it decides
+  //    outright. All the platform can say here is "no account", which is true and
+  //    useless: queued-for-Lumo-to-send and bounced-three-weeks-ago are the same
+  //    activation state and completely different situations.
+  //
+  //    Deferring to the activation state instead would put every freshly added
+  //    household straight into the installer's own queue telling them to chase an
+  //    invite that has not been sent yet. Waiting a few days after a send is not a
+  //    task, and a queue that says it is gets ignored.
+  if (activation === 'no_account') {
     return {
       track: 'invite',
       state: inviteDef,
       owner: inviteDef.owner,
       ...aged(position.inviteSince),
       ...money,
-      needsAttention: inviteDef.owner !== 'nobody',
+      needsAttention: inviteDef.disposition === 'blocked' && inviteDef.owner !== 'nobody',
     };
   }
 

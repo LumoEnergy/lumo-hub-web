@@ -36,8 +36,12 @@ export function Sheet({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
+      {/* Tap-outside-to-dismiss. Hidden from assistive tech and from the tab order:
+          the Close button below is the accessible route out, and two controls both
+          called "Close" is worse than one. */}
       <button
-        aria-label="Close"
+        aria-hidden="true"
+        tabIndex={-1}
         onClick={onClose}
         className="hub-fade-in absolute inset-0 bg-black/35"
       />

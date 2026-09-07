@@ -167,6 +167,19 @@ describe('fixture invariants', () => {
     }
   });
 
+  it('does not leave an invite sitting as "sent" long past the point of no response', () => {
+    // A household who was emailed six weeks ago and never signed up is in
+    // `no_response`, not still `sent_by_lumo`. Exactly how many days that takes is a
+    // product rule nobody has set yet — this asserts the fixtures do not quietly
+    // imply an answer, and does not itself decide one.
+    for (const c of customers) {
+      if (c.activation !== 'no_account') continue;
+      if (c.invite !== 'sent_by_lumo' && c.invite !== 'sent_by_installer') continue;
+      const days = (Date.parse(ASOF) - Date.parse(c.inviteSince)) / 86_400_000;
+      expect(days, `${c.id} has been "sent" for ${days} days with no account`).toBeLessThan(21);
+    }
+  });
+
   it('uses unique ids', () => {
     const ids = customers.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);

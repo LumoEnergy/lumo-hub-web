@@ -207,9 +207,37 @@ describe('adding a customer', () => {
     // The installer confirms the send, which is what distinguishes this from the
     // Lumo path rather than both collapsing into "invited".
     fireEvent.click(screen.getByRole('button', { name: /I've sent it/ }));
-    await waitFor(() => expect(screen.getByText('Rita Nayar')).toBeTruthy());
+
+    // Not in the chase queue: she was invited seconds ago and waiting is not a task.
+    await waitFor(() => expect(screen.getByRole('tab', { name: /All/ })).toBeTruthy());
+    expect(screen.queryByText('Rita Nayar')).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: /All/ }));
     fireEvent.click(screen.getByText('Rita Nayar'));
     expect(within(screen.getByRole('dialog')).getByText('You invited them')).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it('does not ask the installer to chase an invite Lumo has not sent yet', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mount('first-run', '/add');
+    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Rita' } });
+    fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Nayar' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'r@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Continue$/ }));
+    await vi.advanceTimersByTimeAsync(500);
+
+    fireEvent.click(await screen.findByText('Lumo will contact them'));
+    fireEvent.click(screen.getByRole('button', { name: /^Done$/ }));
+
+    await waitFor(() => expect(screen.getByText(/Need chasing/)).toBeTruthy());
+    expect(screen.queryByText('Rita Nayar')).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: /All/ }));
+    fireEvent.click(screen.getByText('Rita Nayar'));
+    const sheet = screen.getByRole('dialog');
+    expect(within(sheet).getByText('Lumo will contact them')).toBeTruthy();
+    expect(within(sheet).getByText(/Whose job — Lumo/)).toBeTruthy();
     vi.useRealTimers();
   });
 });
