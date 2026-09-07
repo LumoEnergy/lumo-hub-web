@@ -48,7 +48,11 @@ npm run build
 firebase deploy --only "hosting:hub-demo-dev" --project lumo-dev-optimizer
 ```
 
-The hosting site `lumo-hub-demo-dev-opt` must exist. To create it once:
+Live at `https://lumo-hub-demo-dev-opt.web.app/d/3FgvdyiYBsD9/`. The site root serves the
+bundle but the app declines to render there, which is the point — verify against the base
+path, not the root. If `base` in `vite.config.js` changes, that URL changes with it.
+
+The hosting site `lumo-hub-demo-dev-opt` already exists. To recreate it:
 
 ```bash
 firebase hosting:sites:create lumo-hub-demo-dev-opt --project lumo-dev-optimizer
