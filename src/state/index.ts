@@ -42,6 +42,9 @@ export { fullDaysBetween, ageBand, ageLabel, AGE_BAND_LABELS, AGE_BAND_ORDER } f
 export type { ProducerGap } from './producerGaps';
 export { PRODUCER_GAPS, producerGapsFor } from './producerGaps';
 
+export type { TrackPosition, ResolvedState, BlockerTrack } from './resolve';
+export { resolveCustomerState, earningsDefinitionFor } from './resolve';
+
 import { INVITE } from './invite';
 import { ACTIVATION } from './activation';
 import { MATCH } from './match';
