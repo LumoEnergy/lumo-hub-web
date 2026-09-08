@@ -48,9 +48,20 @@ npm run build
 firebase deploy --only "hosting:hub-demo-dev" --project lumo-dev-optimizer
 ```
 
-Live at `https://lumo-hub-demo-dev-opt.web.app/d/3FgvdyiYBsD9/`. The site root serves the
-bundle but the app declines to render there, which is the point — verify against the base
-path, not the root. If `base` in `vite.config.js` changes, that URL changes with it.
+Live at `https://lumo-hub-demo-dev-opt.web.app/d/3FgvdyiYBsD9/`. Verify against that path,
+not the site root — the root 404s, which is intended. The path comes from `DEMO_BASE` in
+`src/demoBase.ts`; change it there and the URL changes with it.
+
+**A 200 is not evidence the deploy worked.** The first deploy of this repo returned 200 on
+every asset URL and showed a blank page on every screen: the SPA rewrite was answering
+asset requests with `index.html`, so the browser got `text/html` where it expected
+JavaScript. `npm run build` now runs `scripts/verify-build.mjs`, which fails the build if
+any URL in the built HTML has no matching file. When checking a deploy by hand, look at
+the content type and size, not the status code:
+
+```bash
+curl -sI https://lumo-hub-demo-dev-opt.web.app/d/3FgvdyiYBsD9/ | rg -i "^(HTTP|content-type)"
+```
 
 The hosting site `lumo-hub-demo-dev-opt` already exists. To recreate it:
 

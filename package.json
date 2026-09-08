@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "rm -rf dist && vite build && node scripts/verify-build.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run",

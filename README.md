@@ -62,9 +62,9 @@ npm test
 npm run check
 ```
 
-The app is served from an unguessable path (`base` in `vite.config.js`) and renders nothing
-outside it, plus `noindex` in three places. That is obscurity, not security, and is only
-proportionate because there is no real data here.
+The app is served from an unguessable path (`DEMO_BASE` in `src/demoBase.ts`), the host
+404s everything outside it, and `noindex` is set in three places. That is obscurity, not
+security, and is only proportionate because there is no real data here.
 
 ## Deployment
 

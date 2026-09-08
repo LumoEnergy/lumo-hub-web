@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
+import { DEMO_BASE } from '../demoBase';
 import { CopyBlock } from './ui';
 
 /**
@@ -17,7 +18,7 @@ import { CopyBlock } from './ui';
  * visibly-a-prototype link that works.
  */
 export function personalLink(linkToken: string): string {
-  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const base = DEMO_BASE.replace(/\/$/, '');
   return `${window.location.origin}${base}/join/${linkToken}`;
 }
 

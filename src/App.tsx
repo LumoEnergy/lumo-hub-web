@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Shell } from './components/Shell';
 import { DemoStoreProvider } from './store/DemoStore';
+import { DEMO_BASE } from './demoBase';
 import { personaFromSearch } from './fixtures';
 import { CustomersPage } from './pages/CustomersPage';
 import { AddCustomerPage } from './pages/AddCustomerPage';
@@ -9,16 +10,13 @@ import { JoinPage } from './pages/JoinPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 /**
- * The router is mounted at `import.meta.env.BASE_URL`, which Vite sets from `base` in
- * vite.config.js. Anything outside that path renders nothing recognisable — the demo
- * is unlisted, and a static host will happily serve the SPA shell at the site root
- * unless the app itself declines.
- *
- * Obscurity, not security. Proportionate only because the bundle holds no real data.
+ * The router mounts at `DEMO_BASE`, the same constant vite.config.ts uses for `base`
+ * and for the nested output directory. One value, imported in both places, because
+ * two copies that drift render a blank page rather than an error.
  */
 export default function App() {
   return (
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
+    <BrowserRouter basename={DEMO_BASE}>
       <PersonaGate />
     </BrowserRouter>
   );
