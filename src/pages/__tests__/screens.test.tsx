@@ -1,272 +1,202 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, afterEach } from 'vitest';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import type { ReactElement } from 'react';
 import type { PersonaId } from '../../fixtures';
 import { DemoStoreProvider } from '../../store/DemoStore';
-import { Shell } from '../../components/Shell';
 import { CustomersPage } from '../CustomersPage';
-import { AddCustomerPage } from '../AddCustomerPage';
 import { EarningsPage } from '../EarningsPage';
+import { YourListPage } from '../YourListPage';
 
 afterEach(cleanup);
 
-/**
- * Screen-level guards for the things a research session would be invalidated by:
- * money shown to someone who has earned none, an unmatched household hidden in a
- * list, or an add flow that takes more than a handful of taps.
- */
-function mount(persona: PersonaId, at = '/') {
-  return render(
-    <MemoryRouter initialEntries={[at]}>
+const mount = (persona: PersonaId, element: ReactElement) =>
+  render(
+    <MemoryRouter>
       <DemoStoreProvider personaId={persona}>
         <Routes>
-          <Route path="/" element={<Shell />}>
-            <Route index element={<CustomersPage />} />
-            <Route path="add" element={<AddCustomerPage />} />
-            <Route path="earnings" element={<EarningsPage />} />
-          </Route>
+          <Route path="*" element={element} />
         </Routes>
       </DemoStoreProvider>
     </MemoryRouter>,
   );
-}
 
-describe('the first-run persona', () => {
-  it('shows no money at all, not even a zero', () => {
-    mount('first-run', '/earnings');
-    expect(screen.getByText(/nothing yet, and no guesses/i)).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(/£0\b/);
+const bodyText = () => document.body.textContent ?? '';
+
+describe('the customers screen', () => {
+  it('leads with the company, never a person', () => {
+    mount('mid-campaign', <CustomersPage />);
+    expect(screen.getByRole('heading', { name: /Your customers/ })).toBeTruthy();
+    // The seat holder's name may appear as "supplied by" data, but the money and the
+    // account belong to the firm. Nothing may offer a personal link or QR.
+    expect(bodyText()).not.toMatch(/your link|personal link|QR/i);
   });
 
-  it('never shows a forward-looking figure', () => {
-    // The only amount allowed anywhere in the first-run product is the £50 rule
-    // itself. Any other figure would be a projection, which is the specific thing
-    // that lost installers' trust the first time round.
-    for (const at of ['/', '/add', '/earnings']) {
+  it('aggregates the missing addresses and prices them per household', () => {
+    mount('mid-campaign', <CustomersPage />);
+    const text = bodyText();
+    expect(text).toMatch(/missing an email address/i);
+    // The rate, which is true. Not 28 x £50, which assumes every one converts.
+    expect(text).toMatch(/each one that signs up and stays connected for 30 days is £50/i);
+    expect(text).not.toMatch(/£1,400/);
+  });
+
+  it('states the silent majority once rather than as a hundred rows', () => {
+    mount('mid-campaign', <CustomersPage />);
+    // Under "Needs you" it is absent entirely; the cohort note only appears on All.
+    expect(bodyText()).not.toMatch(/never opened/i);
+  });
+
+  it('surfaces the uncredited household above everything else', () => {
+    mount('mid-campaign', <CustomersPage />);
+    expect(bodyText()).toMatch(/going to nobody/i);
+  });
+
+  it('renders a real sortable table for desktop', () => {
+    mount('mid-campaign', <CustomersPage />);
+    const table = screen.getByRole('table');
+    const headers = within(table).getAllByRole('columnheader');
+    expect(headers.map((h) => h.textContent?.trim().replace(/[↑↓↕]/g, ''))).toEqual([
+      'Household',
+      'Status',
+      'Whose',
+      'Age',
+      'Reward',
+      'Open',
+    ]);
+    // The default order is not a column, so no header can claim it. Saying so beats
+    // an unexplained order or a fake aria-sort on Household.
+    expect(headers.every((h) => h.getAttribute('aria-sort') !== 'descending')).toBe(true);
+    expect(bodyText()).toMatch(/Sorted by what needs you first/i);
+  });
+
+  it('asks for the one approval when nothing has been sent', () => {
+    mount('awaiting-approval', <CustomersPage />);
+    const text = bodyText();
+    expect(text).toMatch(/Nothing has been sent yet/i);
+    expect(text).toMatch(/only sign-off/i);
+    // No earnings figure before a send. The per-household rate in the data-quality
+    // copy is fine; a total on this screen would be a projection.
+    expect(text).not.toMatch(/Yours so far/);
+  });
+
+  it('does not repeat the one approval on all 118 rows', () => {
+    // The failure mode this whole screen exists to avoid. One sign-off releases the
+    // list, so it belongs in the callout, not stamped on every household — which
+    // leaves the per-row queue genuinely empty until someone approves.
+    mount('awaiting-approval', <CustomersPage />);
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(bodyText()).toMatch(/Nothing needs you/i);
+    expect(bodyText()).not.toMatch(/Approve the email/);
+  });
+
+  it('never shows a forecast, in any persona', () => {
+    for (const persona of ['mid-campaign', 'awaiting-approval', 'messy-list'] as const) {
       cleanup();
-      mount('first-run', at);
-      const amounts = (document.body.textContent ?? '').match(/£[\d,]+/g) ?? [];
-      expect(new Set(amounts), at).toEqual(new Set(['£50']));
+      mount(persona, <CustomersPage />);
+      expect(bodyText(), persona).not.toMatch(
+        /could earn|you could|projected|per year|annually|estimate/i,
+      );
     }
   });
+});
 
-  it('never uses the language of a projection', () => {
-    mount('first-run');
-    const text = document.body.textContent ?? '';
-    expect(text).not.toMatch(/could earn|you could|projected|per year|annually|estimate/i);
+describe('the earnings screen', () => {
+  it('states who gets paid, and it is the firm', () => {
+    mount('mid-campaign', <EarningsPage />);
+    expect(bodyText()).toMatch(/Paid to Northfield Renewables/);
   });
 
-  it('makes adding the first customer the hero', () => {
-    mount('first-run');
-    expect(screen.getByText(/add your first customer/i)).toBeTruthy();
+  it('spells out the clawback rule where control has since dropped', () => {
+    mount('mid-campaign', <EarningsPage />);
+    expect(bodyText()).toMatch(/not reversed/i);
+  });
+
+  it('leaves the un-signed-up hundreds off the money screen', () => {
+    // Every non-responder is technically "not earning". Listing them would bury the
+    // twenty that are, and there is nothing to do about them here.
+    mount('mid-campaign', <EarningsPage />);
+    expect(bodyText()).not.toMatch(/No response/);
+  });
+
+  it('shows nothing and promises nothing before a send', () => {
+    mount('awaiting-approval', <EarningsPage />);
+    const text = bodyText();
+    expect(text).toMatch(/Nothing yet, and no guesses/i);
+    expect(text).not.toMatch(/could earn|projected|per year/i);
   });
 });
 
-describe('the messy persona', () => {
-  it('pins the unmatched household above the queue rather than in it', () => {
-    mount('messy');
-    const callout = screen.getByText(/of yours is going to nobody/i);
-    expect(callout).toBeTruthy();
-    // The name appears in the callout, not only as an ordinary row.
-    expect(screen.getByText('Dermot Kelly')).toBeTruthy();
+describe('the your-list screen', () => {
+  it('reports what was loaded, held and rejected, with the reason', () => {
+    mount('mid-campaign', <YourListPage />);
+    const text = bodyText();
+    expect(text).toMatch(/You sent/);
+    expect(text).toMatch(/We loaded/);
+    expect(text).toMatch(/Held back/);
+    expect(text).toMatch(/Could not use/);
+    expect(text).toMatch(/exact duplicates/i);
   });
 
-  it('leads the queue with what the installer can fix themselves', () => {
-    mount('messy');
-    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
-    const owned = headings.findIndex((h) => h?.includes('You can fix these'));
-    const household = headings.findIndex((h) => h?.includes('The household needs to act'));
-    expect(owned).toBeGreaterThanOrEqual(0);
-    expect(owned).toBeLessThan(household);
+  it('shows the email exactly as it arrives, sent as the firm', () => {
+    mount('mid-campaign', <YourListPage />);
+    const text = bodyText();
+    expect(text).toMatch(/Northfield Renewables/);
+    expect(text).toMatch(/hello@northfieldrenewables\.co\.uk/);
+    // Lumo is named as the deliverer, not as the sender.
+    expect(text).toMatch(/on behalf of Northfield Renewables/i);
   });
 
-  it('spells out a dead lead rather than showing a bare day count', () => {
-    mount('messy');
-    expect(screen.getByText(/Dead lead/)).toBeTruthy();
+  it('offers the sender ladder as a question rather than a recommendation', () => {
+    mount('mid-campaign', <YourListPage />);
+    const text = bodyText();
+    expect(text).toMatch(/Send from Lumo's domain/);
+    expect(text).toMatch(/Send from your own domain/);
+    expect(text).toMatch(/Two DNS records/);
+    // The impersonation objection has to be defused explicitly and accurately.
+    expect(text).toMatch(/not us pretending to be you/i);
   });
 
-  it('says whose problem a Lumo-side failure is, in the detail sheet', () => {
-    mount('messy');
-    fireEvent.click(screen.getByText('Orla Byrne'));
-    const sheet = screen.getByRole('dialog');
-    expect(within(sheet).getByText(/Battery offline/)).toBeTruthy();
-    expect(within(sheet).getByText(/Whose job — You/)).toBeTruthy();
-  });
-});
-
-describe('the established persona', () => {
-  it('states plainly that a confirmed reward is not reversed when control drops', () => {
-    mount('established', '/earnings');
-    expect(screen.getAllByText(/not reversed/i).length).toBeGreaterThan(0);
+  it('records who confirmed permission and when', () => {
+    mount('mid-campaign', <YourListPage />);
+    expect(bodyText()).toMatch(/Confirmed by Ade Bankole/);
   });
 
-  it('shows a clock-reset section rather than quietly losing the household', () => {
-    mount('established', '/earnings');
-    expect(screen.getByText(/Clock reset/)).toBeTruthy();
+  it('frames the company link as newsletter content, not as a way to add someone', () => {
+    mount('mid-campaign', <YourListPage />);
+    const text = bodyText();
+    expect(text).toMatch(/not a way to add someone/i);
+    expect(text).toMatch(/lumo\.energy\/j\/northfield/);
   });
 
-  it('does not queue the household whose control Lumo is still testing', () => {
-    mount('established');
-    const queue = screen.getByText('Need chasing').closest('div');
-    expect(queue).toBeTruthy();
-    expect(screen.queryByText('Niall Underhill')).toBeNull();
+  it('puts the paste grid first, and asks for no kit detail', () => {
+    mount('mid-campaign', <YourListPage />);
+    expect(screen.getByLabelText('Name, row 1')).toBeTruthy();
+    expect(screen.getByLabelText('Email, row 1')).toBeTruthy();
+    expect(screen.getByLabelText('Postcode, row 1')).toBeTruthy();
+    // Three columns and no more. A back-book export does not carry kit detail, so a
+    // battery-size field would collect a guess and then be trusted like a fact.
+    // Scoped to the form: the email body mentions an inverter, which is fine.
+    const form = screen.getByLabelText('Name, row 1').closest('section');
+    expect(form?.textContent).not.toMatch(/inverter|battery/i);
   });
 
-  it('shows the full list one tap away', () => {
-    mount('established');
-    fireEvent.click(screen.getByRole('tab', { name: /All/ }));
-    expect(screen.getByText(/Everyone you have added/)).toBeTruthy();
-    expect(screen.getByText('Niall Underhill')).toBeTruthy();
-  });
-});
-
-describe('adding a customer', () => {
-  it('gets from the form to an invited customer in four interactions', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    mount('first-run', '/add');
-
-    // 1-3: the three things that cannot be defaulted.
-    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Rita' } });
-    fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Nayar' } });
-    fireEvent.change(screen.getByLabelText('Email'), {
-      target: { value: 'rita.nayar@example.com' },
-    });
-
-    // 4: continue. Inverter and battery are pre-set, which is what protects the
-    // sixty-second criterion.
-    fireEvent.click(screen.getByRole('button', { name: /^Continue$/ }));
-    await vi.advanceTimersByTimeAsync(500);
-
-    expect(await screen.findByText(/Who makes contact\?/)).toBeTruthy();
-    vi.useRealTimers();
+  it('leads with the approval when it is outstanding', () => {
+    mount('awaiting-approval', <YourListPage />);
+    const text = bodyText();
+    expect(text).toMatch(/Read it, then approve it once/i);
+    expect(text).toMatch(/Approve and send to 118/);
+    expect(text).toMatch(/Waiting on you/);
   });
 
-  it('opens on a single form, with the grid behind a disclosure', () => {
-    mount('first-run', '/add');
-    expect(screen.queryByPlaceholderText('First name')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /add several/i }));
-    expect(screen.getAllByPlaceholderText('First name').length).toBe(5);
-  });
-
-  it('fills the grid from a pasted list', () => {
-    mount('first-run', '/add');
-    fireEvent.click(screen.getByRole('button', { name: /add several/i }));
-    const first = screen.getAllByPlaceholderText('First name')[0];
-    fireEvent.paste(first, {
-      clipboardData: {
-        getData: () =>
-          'Rita\tNayar\trita@example.com\nJoe\tPatel\tjoe@example.com\nAmy\tLunt\tamy@example.com',
-      },
-    });
-    expect(screen.getByText(/Filled 3 rows/)).toBeTruthy();
-    expect(screen.getByDisplayValue('Patel')).toBeTruthy();
-  });
-
-  it('sends nothing until a contact path is chosen', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    mount('first-run', '/add');
-    expect(screen.getByText(/Nothing is sent until you choose/)).toBeTruthy();
-
-    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Rita' } });
-    fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Nayar' } });
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'r@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Continue$/ }));
-    await vi.advanceTimersByTimeAsync(500);
-
-    expect(await screen.findByText(/Nothing has been sent yet/)).toBeTruthy();
-    vi.useRealTimers();
-  });
-
-  it('shows the exact email before Lumo would send it', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    mount('first-run', '/add');
-    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Rita' } });
-    fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Nayar' } });
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'r@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Continue$/ }));
-    await vi.advanceTimersByTimeAsync(500);
-
-    fireEvent.click(await screen.findByText('Lumo will contact them'));
-    expect(await screen.findByText(/exactly what they will receive/i)).toBeTruthy();
-    expect(screen.getByText(/Hi Rita,/)).toBeTruthy();
-    vi.useRealTimers();
-  });
-
-  it('records the two contact paths as different states', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    mount('first-run', '/add');
-    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Rita' } });
-    fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Nayar' } });
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'r@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Continue$/ }));
-    await vi.advanceTimersByTimeAsync(500);
-
-    fireEvent.click(await screen.findByText("I'll contact them"));
-    expect(await screen.findByText(/Send it yourself/)).toBeTruthy();
-    // The installer confirms the send, which is what distinguishes this from the
-    // Lumo path rather than both collapsing into "invited".
-    fireEvent.click(screen.getByRole('button', { name: /I've sent it/ }));
-
-    // Not in the chase queue: she was invited seconds ago and waiting is not a task.
-    await waitFor(() => expect(screen.getByRole('tab', { name: /All/ })).toBeTruthy());
-    expect(screen.queryByText('Rita Nayar')).toBeNull();
-
-    fireEvent.click(screen.getByRole('tab', { name: /All/ }));
-    fireEvent.click(screen.getByText('Rita Nayar'));
-    expect(within(screen.getByRole('dialog')).getByText('You invited them')).toBeTruthy();
-    vi.useRealTimers();
-  });
-
-  it('does not ask the installer to chase an invite Lumo has not sent yet', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    mount('first-run', '/add');
-    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Rita' } });
-    fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Nayar' } });
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'r@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Continue$/ }));
-    await vi.advanceTimersByTimeAsync(500);
-
-    fireEvent.click(await screen.findByText('Lumo will contact them'));
-    fireEvent.click(screen.getByRole('button', { name: /^Done$/ }));
-
-    await waitFor(() => expect(screen.getByText(/Need chasing/)).toBeTruthy());
-    expect(screen.queryByText('Rita Nayar')).toBeNull();
-
-    fireEvent.click(screen.getByRole('tab', { name: /All/ }));
-    fireEvent.click(screen.getByText('Rita Nayar'));
-    const sheet = screen.getByRole('dialog');
-    expect(within(sheet).getByText('Lumo will contact them')).toBeTruthy();
-    expect(within(sheet).getByText(/Whose job — Lumo/)).toBeTruthy();
-    vi.useRealTimers();
-  });
-});
-
-describe('the shell', () => {
-  it('keeps the personal link one tap away on every screen', () => {
-    mount('established', '/earnings');
-    fireEvent.click(screen.getByRole('button', { name: /your personal link/i }));
-    const sheet = screen.getByRole('dialog');
-    expect(within(sheet).getByText(/not Northfield Renewables's/)).toBeTruthy();
-  });
-
-  it('offers a reset only once the demo has been changed', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    mount('messy');
-    expect(screen.queryByRole('button', { name: /reset this demo/i })).toBeNull();
-
-    fireEvent.click(screen.getByRole('link', { name: /Add/ }));
-    fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Rita' } });
-    fireEvent.change(screen.getByLabelText('Last name'), { target: { value: 'Nayar' } });
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'r@example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Continue$/ }));
-    await vi.advanceTimersByTimeAsync(500);
-    fireEvent.click(await screen.findByText('Lumo will contact them'));
-    fireEvent.click(screen.getByRole('button', { name: /^Done$/ }));
-
-    const reset = await screen.findByRole('button', { name: /reset this demo/i });
-    fireEvent.click(reset);
-    expect(screen.queryByText('Rita Nayar')).toBeNull();
-    vi.useRealTimers();
+  it('never asks the firm to report work they did themselves', () => {
+    for (const persona of ['mid-campaign', 'awaiting-approval', 'messy-list'] as const) {
+      cleanup();
+      mount(persona, <YourListPage />);
+      expect(bodyText(), persona).not.toMatch(
+        /mark as sent|I(?:'| have)?ve sent|confirm you sent/i,
+      );
+    }
   });
 });

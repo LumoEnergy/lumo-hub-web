@@ -2,9 +2,13 @@ import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 
 /**
- * One bottom sheet, three uses: customer detail, the share panel, and the invite
- * preview. The spec forbids a second overlay pattern — a phone-sized tool with two
- * kinds of modal teaches nothing consistent about how to dismiss things.
+ * One overlay: a bottom sheet on a phone, a centred dialog on a laptop. The spec
+ * forbids a second overlay pattern — a tool with two kinds of modal teaches nothing
+ * consistent about how to dismiss things.
+ *
+ * The responsive switch is presentation only. Anchoring to the bottom edge is right
+ * where a thumb is and wrong on a 1400px screen, where a panel welded to the bottom
+ * of the viewport reads as a notification rather than as the record you just opened.
  */
 export function Sheet({
   open,
@@ -35,7 +39,7 @@ export function Sheet({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center lg:items-center lg:p-6">
       {/* Tap-outside-to-dismiss. Hidden from assistive tech and from the tab order:
           the Close button below is the accessible route out, and two controls both
           called "Close" is worse than one. */}
@@ -49,7 +53,7 @@ export function Sheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="hub-sheet-in relative flex max-h-[88vh] w-full max-w-[480px] flex-col rounded-t-sheet border border-line bg-surface"
+        className="hub-sheet-in relative flex max-h-[88vh] w-full max-w-[480px] flex-col rounded-t-sheet border border-line bg-surface lg:max-h-[85vh] lg:max-w-[560px] lg:rounded-sheet lg:shadow-xl"
       >
         <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
           <h2 className="text-[17px] font-bold text-ink">{title}</h2>

@@ -148,13 +148,28 @@ const STATES: Record<ContactStateId, StateDefinition<ContactStateId>> = {
       'A better address puts them straight back in the queue. Bounces also hurt our sending reputation, so this one helps the rest of your list too.',
     disposition: 'blocked',
   },
+  /**
+   * OWNED BY NOBODY, DELIBERATELY, and this is the most arguable call in the track.
+   *
+   * A firm can act on a non-responder: a call from the company that fitted the
+   * battery is the only thing left that would work. But this is the largest state in
+   * any back-book campaign by a wide margin — around a hundred rows out of two
+   * hundred — and a per-row task repeated a hundred times is not a queue, it is
+   * wallpaper. It would bury the thirty-odd rows that genuinely need one specific
+   * thing doing.
+   *
+   * So it is a cohort, not a task list. The row carries no action and never enters
+   * the queue; the customers screen states the aggregate and makes the argument once.
+   * Same reasoning as the held rows: one number with a total attached is an argument,
+   * an itemised list of a hundred is a chore.
+   */
   no_response: {
     id: 'no_response',
     label: 'No response',
-    blocker: 'Delivered a fortnight ago and never opened. A second email will not fix that.',
-    owner: 'installer',
-    action:
-      'Worth a call if they were a good customer. We will not chase these again — repeatedly mailing people who ignore us is how a sending domain dies.',
+    blocker:
+      'Delivered and never opened. Lumo will not email these again — repeatedly mailing people who ignore us is how a sending domain dies, and it would take the rest of your list down with it.',
+    owner: 'nobody',
+    action: null,
     disposition: 'blocked',
   },
   unsubscribed: {
@@ -225,3 +240,25 @@ export const isPreSignup = (id: ContactStateId): boolean => id !== 'signed_up';
  * the ONLY place the product asks them for data-entry work.
  */
 export const HELD_STATES: readonly ContactStateId[] = ['held_no_email', 'held_unconfirmed'];
+
+/**
+ * States where the household is NOT the unit of work, so the row must never appear
+ * as an individual task.
+ *
+ * This is the same lesson as `no_response` in three more places, and it is the one
+ * that decides whether the queue is usable. `awaiting_approval` is the clearest: one
+ * sign-off releases the entire list, so putting it on every row would produce a
+ * hundred and eighteen identical instructions to click the same button once. The
+ * held states and bounces are batch jobs — fifty missing addresses is a job you sit
+ * down and do, not fifty separate decisions.
+ *
+ * Each of these is presented in aggregate above the list instead. `clicked` is
+ * deliberately absent: a warm lead is a specific person somebody would ring, and a
+ * name is what makes that possible.
+ */
+export const AGGREGATED_STATES: readonly ContactStateId[] = [
+  'awaiting_approval',
+  'held_no_email',
+  'held_unconfirmed',
+  'bounced',
+];

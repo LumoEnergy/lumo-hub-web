@@ -32,7 +32,7 @@ What happened to the campaign email Lumo sends to the back-book, on the installe
 | `clicked` | Interested, not signed up | They clicked through and then stopped part-way. They are interested and something put them off. | You | The warmest leads on your list. A call from the firm that fitted their battery converts these far better than another email from a company they have never heard of. |
 | `signed_up` | Signed up | — | Nobody | — |
 | `bounced` | Email bounced | The address on your list is dead, so they never saw it. Common on a back-book — people change provider and move house. | You | A better address puts them straight back in the queue. Bounces also hurt our sending reputation, so this one helps the rest of your list too. |
-| `no_response` | No response | Delivered a fortnight ago and never opened. A second email will not fix that. | You | Worth a call if they were a good customer. We will not chase these again — repeatedly mailing people who ignore us is how a sending domain dies. |
+| `no_response` | No response | Delivered and never opened. Lumo will not email these again — repeatedly mailing people who ignore us is how a sending domain dies, and it would take the rest of your list down with it. | Nobody | — |
 | `unsubscribed` | Opted out | They asked not to be contacted again, so we will not, and neither should you. | Nobody | — |
 | `complained` | Marked as spam | They reported the email. Shown because it is honest and because it is the clearest signal that a list had addresses on it that should not have been there. | Nobody | — |
 

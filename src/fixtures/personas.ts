@@ -330,7 +330,17 @@ const NORTHFIELD_SEATS: readonly HubSeat[] = [
 
 const MID_CAMPAIGN_CUSTOMERS: readonly CustomerSeed[] = [
   // The money. 14 paid, 6 confirmed and awaiting the pay run, 5 mid-clock.
-  ...bulk(earningPaid, 14, 0, 'imp-1', 'Ade Bankole'),
+  ...bulk(earningPaid, 13, 0, 'imp-1', 'Ade Bankole'),
+  // Paid, and the customer has since turned control off. The whole point of writing
+  // "confirmed is final" down: the firm did their job, the money stays theirs, and
+  // nothing here may imply otherwise. Without a row in this state the clawback copy
+  // is untested prose.
+  {
+    ...earningPaid(base(13, 'imp-1', 'Rita Mensah'), 13),
+    activation: 'Smart Control Inactive',
+    activationSinceDaysAgo: 9,
+    controlActiveSinceDaysAgo: null,
+  },
   ...bulk(earningConfirmed, 6, 14, 'imp-1', 'Ade Bankole'),
   ...bulk(qualifying, 5, 20, 'imp-1', 'Sean Docherty'),
 

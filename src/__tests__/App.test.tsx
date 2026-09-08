@@ -21,15 +21,27 @@ describe('App at the base path', () => {
     expect(screen.getByRole('heading', { name: 'Your customers' })).toBeTruthy();
   });
 
-  it('mounts the shell navigation', () => {
+  it('mounts both shell navigations, and keeps them tellable apart', () => {
     render(<App />);
-    expect(screen.getByRole('link', { name: /Customers/ })).toBeTruthy();
-    expect(screen.getByRole('link', { name: /Earnings/ })).toBeTruthy();
+    // Two of each link is correct: the sidebar and the bottom tab bar are both in the
+    // DOM and CSS chooses. The named landmarks are what stop that being a mess for
+    // anyone not looking at the CSS.
+    expect(screen.getAllByRole('link', { name: /Customers/ })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: /Earnings/ })).toHaveLength(2);
+    expect(screen.getByRole('navigation', { name: 'Sections' })).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Sections, bottom bar' })).toBeTruthy();
   });
 
-  it('defaults to the established persona', () => {
+  it('identifies the account by company, not by the person logged in', () => {
     render(<App />);
-    expect(screen.getByText(/Northfield Renewables/)).toBeTruthy();
+    expect(screen.getAllByText(/Northfield Renewables/).length).toBeGreaterThan(0);
+  });
+
+  it('defaults to the mid-campaign persona', () => {
+    render(<App />);
+    // Sign-off already given, money on the board. The demo opens on the state that
+    // shows the product working rather than on an empty account.
+    expect(screen.queryByText(/Nothing has been sent yet/)).toBeNull();
   });
 
   it('is being exercised at the real base path', () => {

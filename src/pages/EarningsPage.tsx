@@ -5,43 +5,66 @@ import { displayName } from '../fixtures';
 import { useDemoStore } from '../store/DemoStore';
 import { buildRows, earningsSummary, gbp } from '../selectors/customers';
 import type { CustomerRow } from '../selectors/customers';
-import { CustomerDetail } from '../components/CustomerRow';
+import { CustomerDetail, ageIsMoot } from '../components/CustomerRow';
 import { Sheet } from '../components/Sheet';
-import { AgeChip, Button, Card, EmptyState, ScreenTitle, SectionHeading } from '../components/ui';
+import {
+  AgeChip,
+  Button,
+  Callout,
+  Card,
+  EmptyState,
+  ScreenTitle,
+  SectionHeading,
+} from '../components/ui';
 
 /**
- * Earnings.
+ * Earnings, at company level.
  *
- * Two rules govern this screen, and both were settled deliberately because a screen
- * cannot be honest without them:
+ * THE MONEY IS OWED TO THE FIRM. There is no per-person breakdown and no individual
+ * leaderboard, because Lumo's customer is the company and Lumo pays the company. If a
+ * firm wants to pass a bonus to the engineer who supplied a household that is entirely
+ * their business, and the "supplied by" field on each record is there so they can work
+ * it out — but it is their decision, made with their own data, not a Lumo scheme.
+ *
+ * Two rules govern this screen, both settled deliberately because a screen cannot be
+ * honest without them:
  *
  *   - Every pending £50 is shown next to the thing holding it up. A pending amount
  *     with no reason attached is the "return we cannot show you" problem restated.
- *   - Confirmed is final. Where control has since dropped, the screen says the
- *     payment is not reversed, in words, rather than leaving an installer to wonder.
+ *   - Confirmed is final. Where control has since dropped, the screen says the payment
+ *     is not reversed, in words, rather than leaving a firm to wonder.
  *
- * And one rule about what is absent: no projection, no "you could earn", no
- * annualised figure. Only money that has been earned, is being earned, or has been
- * lost. The live Hub showed installers a growth chart while they had earned nothing,
- * and it is the fastest way to lose the room.
+ * And one rule about what is absent: no projection, no "you could earn", no annualised
+ * figure. Only money that has been earned, is being earned, or has been lost. The live
+ * Hub showed installers a growth chart while they had earned nothing, and that is the
+ * fastest way to lose the room.
+ *
+ * ONLY HOUSEHOLDS WITH AN ACCOUNT APPEAR HERE. A back-book campaign has hundreds of
+ * rows that have not signed up, and every one of them is technically "not earning".
+ * Listing them would bury the twenty that are, and they are already on the customers
+ * screen where something can actually be done about them.
  */
 export function EarningsPage() {
-  const { customers, asOf } = useDemoStore();
+  const { customers, asOf, company } = useDemoStore();
   const [open, setOpen] = useState<CustomerRow | null>(null);
 
-  const rows = useMemo(() => buildRows(customers, asOf), [customers, asOf]);
+  const allRows = useMemo(() => buildRows(customers, asOf), [customers, asOf]);
+  const rows = useMemo(
+    () => allRows.filter((row) => row.customer.contact === 'signed_up'),
+    [allRows],
+  );
   const summary = useMemo(() => earningsSummary(rows), [rows]);
 
-  if (customers.length === 0) {
+  if (rows.length === 0) {
     return (
       <>
-        <ScreenTitle>Your earnings</ScreenTitle>
+        <ScreenTitle>Earnings</ScreenTitle>
         <EmptyState
           title="Nothing yet, and no guesses"
-          body={`You earn £${REWARD_GBP} for each household whose smart control runs for ${QUALIFYING_DAYS} days in a row. This screen will only ever show money that is real.`}
+          body={`${company.name} earns £${REWARD_GBP} for each household whose smart control runs for ${QUALIFYING_DAYS} days in a row. This screen will only ever show money that is real — the moment one of your customers signs up, they appear here.`}
           action={
-            <Link to="/add">
-              <Button>Add a customer</Button>
+            <Link to="/list">
+              <Button>See what happened to your list</Button>
             </Link>
           }
         />
@@ -51,46 +74,40 @@ export function EarningsPage() {
 
   return (
     <>
-      <ScreenTitle>Your earnings</ScreenTitle>
+      <ScreenTitle sub={`Paid to ${company.name}. £${REWARD_GBP} per household, once.`}>
+        Earnings
+      </ScreenTitle>
 
-      <Card className="mx-4 p-4">
-        <p className="text-[13px] font-semibold text-ink-soft">Yours</p>
-        <p className="tnum text-[40px] font-bold leading-none text-accent">
-          {gbp(summary.earnedGbp)}
-        </p>
-        <div className="mt-3 flex gap-4 border-t border-line pt-3">
-          <Figure label="Paid" value={gbp(summary.paidGbp)} />
-          <Figure label="Next pay run" value={gbp(summary.awaitingPayoutGbp)} />
-          <Figure label="Clock running" value={gbp(summary.pendingGbp)} muted />
-        </div>
-      </Card>
+      <div className="px-4 lg:px-0">
+        <Card className="p-4">
+          <p className="text-[13px] font-semibold text-ink-soft">Yours</p>
+          <p className="tnum text-[40px] font-bold leading-none text-accent">
+            {gbp(summary.earnedGbp)}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-4 border-t border-line pt-3">
+            <Figure label="Paid" value={gbp(summary.paidGbp)} />
+            <Figure label="Next pay run" value={gbp(summary.awaitingPayoutGbp)} />
+            <Figure label="Clock running" value={gbp(summary.pendingGbp)} muted />
+          </div>
+        </Card>
+      </div>
 
       {summary.atStakeGbp > 0 ? (
-        <div className="mx-4 mt-3 rounded-card border border-dead-fg/30 bg-dead-bg p-3">
-          <p className="text-[15px] font-bold text-dead-fg">
-            {gbp(summary.atStakeGbp)} earned and credited to nobody
-          </p>
-          <p className="mt-1 text-[14px] text-dead-fg/90">
-            {summary.blockedByMatch.length === 1 ? 'A household' : 'Households'} on Lumo, running,
-            with nothing tying {summary.blockedByMatch.length === 1 ? 'them' : 'them'} to you.
-          </p>
-          <ul className="mt-2 space-y-1">
-            {summary.blockedByMatch.map((row) => (
-              <li key={row.customer.id}>
-                <button
-                  onClick={() => setOpen(row)}
-                  className="flex w-full items-center justify-between gap-3 py-1 text-left"
-                >
-                  <span className="truncate text-[14px] font-semibold text-dead-fg">
-                    {displayName(row.customer)}
-                  </span>
-                  <span className="tnum shrink-0 text-[14px] font-semibold text-dead-fg">
-                    £{REWARD_GBP}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+        <div className="mt-3 px-4 lg:px-0">
+          <Callout
+            tone="alarm"
+            title={`${gbp(summary.atStakeGbp)} earned and credited to nobody`}
+            body={`${
+              summary.blockedByMatch.length === 1 ? 'A household' : 'Households'
+            } on Lumo, running, with nothing tying them to you. Confirm they are yours and we will tie the account across.`}
+            action={
+              <Button variant="secondary" onClick={() => setOpen(summary.blockedByMatch[0])}>
+                {summary.blockedByMatch.length === 1
+                  ? 'Claim it'
+                  : `Claim ${summary.blockedByMatch.length}`}
+              </Button>
+            }
+          />
         </div>
       ) : null}
 
@@ -144,7 +161,7 @@ export function EarningsPage() {
 
       {summary.notStarted.length > 0 ? (
         <MoneySection
-          heading="Not started"
+          heading="Signed up, not earning yet"
           note="The 30 days begin the first time their control runs. Each of these is waiting on something."
           rows={summary.notStarted}
           onOpen={setOpen}
@@ -152,8 +169,9 @@ export function EarningsPage() {
         />
       ) : null}
 
-      <p className="px-4 py-6 text-center text-[13px] text-ink-mute">
-        £{REWARD_GBP} per household, once. No forecasts on this screen — only what is real.
+      <p className="px-4 py-6 text-center text-[13px] text-ink-mute lg:px-0">
+        £{REWARD_GBP} per household, once, paid to {company.name}. No forecasts on this
+        screen — only what is real.
       </p>
 
       <Sheet
@@ -167,17 +185,9 @@ export function EarningsPage() {
   );
 }
 
-function Figure({
-  label,
-  value,
-  muted,
-}: {
-  label: string;
-  value: string;
-  muted?: boolean;
-}) {
+function Figure({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
   return (
-    <div className="flex-1">
+    <div className="min-w-[7rem] flex-1">
       <p className={`tnum text-[17px] font-bold ${muted ? 'text-ink-soft' : 'text-ink'}`}>
         {value}
       </p>
@@ -188,8 +198,8 @@ function Figure({
 
 /**
  * A money section. `showBlocker` is what ties a pending £50 to the reason it is
- * pending, and names who owns that reason — otherwise the installer is looking at
- * money they cannot act on.
+ * pending, and names who owns that reason — otherwise the firm is looking at money
+ * they cannot act on.
  */
 function MoneySection({
   heading,
@@ -209,31 +219,35 @@ function MoneySection({
   return (
     <section>
       <SectionHeading count={rows.length}>{heading}</SectionHeading>
-      <p className="px-4 pb-2 text-[13px] text-ink-mute">{note}</p>
-      <Card className="mx-4 overflow-hidden">
+      <p className="px-4 pb-2 text-[13px] text-ink-mute lg:px-0">{note}</p>
+      <Card className="mx-4 overflow-hidden lg:mx-0">
         <ul>
           {rows.map((row) => (
             <li key={row.customer.id}>
               <button
                 onClick={() => onOpen(row)}
-                className="flex min-h-[56px] w-full items-center gap-3 border-b border-line px-4 py-3 text-left last:border-b-0"
+                className="flex min-h-[56px] w-full items-center gap-3 border-b border-line px-4 py-3 text-left transition-colors duration-150 last:border-b-0 hover:bg-sunk lg:min-h-[44px] lg:py-2"
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[16px] font-semibold text-ink">
+                  <span className="block truncate text-[16px] font-semibold text-ink lg:text-[15px]">
                     {displayName(row.customer)}
                   </span>
                   {showBlocker && row.resolved.state ? (
-                    <span className="block truncate text-[14px] text-ink-soft">
+                    <span className="block truncate text-[14px] text-ink-soft lg:text-[13px]">
                       {row.resolved.state.label} · {OWNER_LABELS[row.resolved.owner]}
                     </span>
                   ) : detail ? (
-                    <span className="block truncate text-[14px] text-ink-soft">
+                    <span className="block truncate text-[14px] text-ink-soft lg:text-[13px]">
                       {detail(row)}
                     </span>
                   ) : null}
                 </span>
                 {showBlocker && row.resolved.state ? (
-                  <AgeChip days={row.resolved.ageDays} band={row.resolved.ageBand} />
+                  <AgeChip
+                    days={row.resolved.ageDays}
+                    band={row.resolved.ageBand}
+                    muted={ageIsMoot(row)}
+                  />
                 ) : null}
                 <span className="tnum shrink-0 text-[15px] font-semibold text-ink">
                   £{REWARD_GBP}

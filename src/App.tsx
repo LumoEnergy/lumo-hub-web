@@ -4,7 +4,7 @@ import { DemoStoreProvider } from './store/DemoStore';
 import { DEMO_BASE } from './demoBase';
 import { personaFromSearch } from './fixtures';
 import { CustomersPage } from './pages/CustomersPage';
-import { AddCustomerPage } from './pages/AddCustomerPage';
+import { YourListPage } from './pages/YourListPage';
 import { EarningsPage } from './pages/EarningsPage';
 import { JoinPage } from './pages/JoinPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -36,11 +36,14 @@ function PersonaGate() {
       <Routes>
         <Route path="/" element={<Shell />}>
           <Route index element={<CustomersPage />} />
-          <Route path="add" element={<AddCustomerPage />} />
           <Route path="earnings" element={<EarningsPage />} />
+          <Route path="list" element={<YourListPage />} />
+          {/* The old add-a-customer screen. Adding by hand is now a panel on
+              `list`, so anything holding the old URL lands somewhere sensible. */}
+          <Route path="add" element={<Navigate to="/list" replace />} />
         </Route>
-        {/* Where the personal link and QR resolve to. */}
-        <Route path="/join/:token" element={<JoinPage />} />
+        {/* Where the company newsletter link resolves to. */}
+        <Route path="/j/:token" element={<JoinPage />} />
         <Route path="/index.html" element={<Navigate to="/" replace />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

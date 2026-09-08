@@ -1,14 +1,14 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { HubCustomer, PersonaId } from '../fixtures';
-import { PERSONAS, loadPersona, today } from '../fixtures';
+import type { HubCustomer, MaterialisedPersona, PersonaId } from '../fixtures';
+import { loadPersona } from '../fixtures';
 
 /**
  * In-memory demo state.
  *
  * Nothing here persists and nothing leaves the tab. That is the point: the store
- * exists so the demo feels alive — add a customer and it appears in the list — while
- * remaining incapable of sending an email or writing anywhere.
+ * exists so the demo feels alive — approve the campaign and the list starts moving —
+ * while remaining incapable of sending an email or writing anywhere.
  *
  * There is no localStorage either. A research session should start from a known
  * persona every time, and a half-finished previous session leaking into the next one
@@ -19,24 +19,33 @@ export interface CustomerDraft {
   readonly firstName: string;
   readonly lastName: string;
   readonly email: string;
-  readonly inverterMake: string;
-  readonly batterySizeKwh: number;
+  readonly postcode: string;
 }
+
+type Company = MaterialisedPersona['company'];
 
 interface DemoStore {
   readonly personaId: PersonaId;
   readonly personaName: string;
   readonly personaPurpose: string;
-  readonly installer: (typeof PERSONAS)[PersonaId]['installer'];
+  readonly company: Company;
   readonly customers: readonly HubCustomer[];
   /** Today, as an ISO date. Fixed for the session so ages do not shift mid-demo. */
   readonly asOf: string;
-  /** True once anything has been added or invited in this session. */
+  /** True once anything has been changed in this session. */
   readonly dirty: boolean;
+  /**
+   * The one sign-off the product asks for. Approving moves every ready household
+   * into the send queue at once, which is the whole promise: one action, whole list.
+   */
+  approveCampaign: () => void;
+  /** Supplying a missing address releases a held row back into the queue. */
+  supplyEmail: (id: string, email: string) => void;
+  /** Confirming storage releases a row held for an unconfirmed battery. */
+  confirmBattery: (id: string, hasBattery: boolean) => void;
+  /** Claiming an unmatched household. Lumo ties it by hand. */
+  claimHousehold: (id: string) => void;
   addCustomers: (drafts: readonly CustomerDraft[]) => readonly string[];
-  /** Records the contact path. Both paths are recorded distinctly, deliberately. */
-  markStagedForLumo: (ids: readonly string[]) => void;
-  markSentByInstaller: (ids: readonly string[]) => void;
   reset: () => void;
 }
 
@@ -55,94 +64,160 @@ export function DemoStoreProvider({
   personaId: PersonaId;
   children: ReactNode;
 }) {
-  const asOf = useMemo(() => today(), []);
-  const initial = useMemo(() => loadPersona(personaId, asOf), [personaId, asOf]);
+  // One Date for the session, so every age and every clock agrees.
+  const loaded = useMemo(() => loadPersona(personaId, new Date()), [personaId]);
 
-  const [customers, setCustomers] = useState<readonly HubCustomer[]>(initial.customers);
+  const [customers, setCustomers] = useState<readonly HubCustomer[]>(loaded.customers);
+  const [company, setCompany] = useState<Company>(loaded.company);
   const [dirty, setDirty] = useState(false);
+  const asOf = loaded.asOf;
+
+  const patch = useCallback(
+    (ids: readonly string[], change: (c: HubCustomer) => HubCustomer) => {
+      const wanted = new Set(ids);
+      setCustomers((current) => current.map((c) => (wanted.has(c.id) ? change(c) : c)));
+      setDirty(true);
+    },
+    [],
+  );
+
+  const approveCampaign = useCallback(() => {
+    setCompany((current) => ({
+      ...current,
+      campaignEmail: {
+        ...current.campaignEmail,
+        approved: true,
+        approvedBy: current.seats.find((s) => s.isCurrentUser)?.name ?? null,
+        approvedOn: asOf,
+      },
+    }));
+    setCustomers((current) =>
+      current.map((c) =>
+        // Held rows stay held: approving the email does not conjure an address.
+        c.contact === 'awaiting_approval'
+          ? { ...c, contact: 'queued', contactSince: asOf }
+          : c,
+      ),
+    );
+    setDirty(true);
+  }, [asOf]);
+
+  const supplyEmail = useCallback(
+    (id: string, email: string) =>
+      patch([id], (c) => ({
+        ...c,
+        email: email.trim().toLowerCase(),
+        // Straight to the queue, not back for approval. The firm signed off the
+        // email, not each recipient.
+        contact: company.campaignEmail.approved ? 'queued' : 'awaiting_approval',
+        contactSince: asOf,
+      })),
+    [patch, asOf, company.campaignEmail.approved],
+  );
+
+  const confirmBattery = useCallback(
+    (id: string, hasBattery: boolean) =>
+      patch([id], (c) => ({
+        ...c,
+        // No battery means no household to contact. Held for a missing address is the
+        // wrong answer, so it becomes an opted-out row rather than a phantom lead.
+        contact: hasBattery
+          ? company.campaignEmail.approved
+            ? 'queued'
+            : 'awaiting_approval'
+          : 'unsubscribed',
+        contactSince: asOf,
+      })),
+    [patch, asOf, company.campaignEmail.approved],
+  );
+
+  const claimHousehold = useCallback(
+    (id: string) =>
+      patch([id], (c) => ({ ...c, match: 'matched_manual', matchSince: asOf })),
+    [patch, asOf],
+  );
 
   const addCustomers = useCallback(
     (drafts: readonly CustomerDraft[]) => {
-      const created = drafts.map<HubCustomer>((draft) => ({
-        id: nextId(),
-        firstName: draft.firstName.trim(),
-        lastName: draft.lastName.trim(),
-        email: draft.email.trim().toLowerCase(),
-        inverterMake: draft.inverterMake,
-        batterySizeKwh: draft.batterySizeKwh,
-        addedOn: asOf,
-        // Added, and no contact path chosen yet. The fork is the next screen.
-        invite: 'added',
-        inviteSince: asOf,
-        activation: 'no_account',
-        activationSince: asOf,
-        match: null,
-        matchSince: null,
-        qualification: {
-          everActive: false,
-          controlActiveSince: null,
-          qualifiedAt: null,
-          paidAt: null,
-        },
-      }));
+      const seat = company.seats.find((s) => s.isCurrentUser)?.name ?? 'Unknown';
+      const created = drafts.map<HubCustomer>((draft) => {
+        const email = draft.email.trim().toLowerCase();
+        return {
+          id: nextId(),
+          firstName: draft.firstName.trim(),
+          lastName: draft.lastName.trim(),
+          email: email === '' ? null : email,
+          postcode: draft.postcode.trim().toUpperCase() || null,
+          // A back-book row rarely carries kit detail, and an ad-hoc add is a
+          // back-book row of one. Asking for it here would be asking for data the
+          // person typing usually does not have to hand.
+          inverterMake: null,
+          batterySizeKwh: null,
+          importedOn: asOf,
+          importBatchId: company.imports[0]?.id ?? 'imp-1',
+          addedBy: seat,
+          contact:
+            email === ''
+              ? 'held_no_email'
+              : company.campaignEmail.approved
+                ? 'queued'
+                : 'awaiting_approval',
+          contactSince: asOf,
+          activation: 'no_account',
+          activationSince: asOf,
+          match: null,
+          matchSince: null,
+          qualification: {
+            everActive: false,
+            controlActiveSince: null,
+            qualifiedAt: null,
+            paidAt: null,
+          },
+        };
+      });
       setCustomers((current) => [...created, ...current]);
       setDirty(true);
       return created.map((c) => c.id);
     },
-    [asOf],
-  );
-
-  const setInvite = useCallback(
-    (ids: readonly string[], invite: HubCustomer['invite']) => {
-      const wanted = new Set(ids);
-      setCustomers((current) =>
-        current.map((c) =>
-          wanted.has(c.id) ? { ...c, invite, inviteSince: asOf } : c,
-        ),
-      );
-      setDirty(true);
-    },
-    [asOf],
-  );
-
-  const markStagedForLumo = useCallback(
-    (ids: readonly string[]) => setInvite(ids, 'staged_for_lumo'),
-    [setInvite],
-  );
-
-  const markSentByInstaller = useCallback(
-    (ids: readonly string[]) => setInvite(ids, 'sent_by_installer'),
-    [setInvite],
+    [asOf, company.seats, company.imports, company.campaignEmail.approved],
   );
 
   const reset = useCallback(() => {
-    setCustomers(loadPersona(personaId, asOf).customers);
+    const fresh = loadPersona(personaId, new Date());
+    setCustomers(fresh.customers);
+    setCompany(fresh.company);
     setDirty(false);
-  }, [personaId, asOf]);
+  }, [personaId]);
 
   const value = useMemo<DemoStore>(
     () => ({
       personaId,
-      personaName: initial.persona.name,
-      personaPurpose: initial.persona.purpose,
-      installer: initial.persona.installer,
+      personaName: loaded.name,
+      personaPurpose: loaded.purpose,
+      company,
       customers,
       asOf,
       dirty,
+      approveCampaign,
+      supplyEmail,
+      confirmBattery,
+      claimHousehold,
       addCustomers,
-      markStagedForLumo,
-      markSentByInstaller,
       reset,
     }),
     [
       personaId,
-      initial.persona,
+      loaded.name,
+      loaded.purpose,
+      company,
       customers,
       asOf,
       dirty,
+      approveCampaign,
+      supplyEmail,
+      confirmBattery,
+      claimHousehold,
       addCustomers,
-      markStagedForLumo,
-      markSentByInstaller,
       reset,
     ],
   );

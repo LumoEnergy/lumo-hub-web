@@ -6,211 +6,258 @@ import { useDemoStore } from '../store/DemoStore';
 import {
   actionQueue,
   buildRows,
+  dataQualityGroups,
   earningCount,
   earningsSummary,
   gbp,
   needsAttentionCount,
+  silentCohort,
+  sortRows,
   unmatchedRows,
 } from '../selectors/customers';
-import type { CustomerRow } from '../selectors/customers';
-import { CustomerDetail, CustomerRowItem } from '../components/CustomerRow';
+import type { CustomerRow, SortDirection, SortKey } from '../selectors/customers';
+import { CustomerDetail, CustomerCard } from '../components/CustomerRow';
+import { CustomerTable } from '../components/CustomerTable';
 import { Sheet } from '../components/Sheet';
+import { HeldRowFixer, UnmatchedFixer } from '../components/Fixers';
 import {
   Button,
+  Callout,
   Card,
   EmptyState,
   ScreenTitle,
   SectionHeading,
   SegmentedToggle,
+  SummaryStrip,
 } from '../components/ui';
 
 type View = 'queue' | 'all';
 
 export function CustomersPage() {
-  const { customers, asOf, dirty, reset, installer } = useDemoStore();
+  const { customers, asOf, company } = useDemoStore();
   const [view, setView] = useState<View>('queue');
   const [open, setOpen] = useState<CustomerRow | null>(null);
+  const [sort, setSort] = useState<SortKey>('priority');
+  const [direction, setDirection] = useState<SortDirection>('desc');
 
   const rows = useMemo(() => buildRows(customers, asOf), [customers, asOf]);
   const groups = useMemo(() => actionQueue(rows), [rows]);
   const unmatched = useMemo(() => unmatchedRows(rows), [rows]);
+  const quality = useMemo(() => dataQualityGroups(rows), [rows]);
+  const silent = useMemo(() => silentCohort(rows), [rows]);
   const summary = useMemo(() => earningsSummary(rows), [rows]);
   const attention = needsAttentionCount(rows);
+
+  const queueRows = useMemo(() => groups.flatMap((g) => g.rows), [groups]);
+  const tableRows = useMemo(
+    () => sortRows(view === 'queue' ? queueRows : rows, sort, direction),
+    [view, queueRows, rows, sort, direction],
+  );
+
+  const onSort = (key: SortKey) => {
+    if (key === sort) {
+      setDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSort(key);
+      setDirection(key === 'household' || key === 'status' ? 'asc' : 'desc');
+    }
+  };
 
   if (customers.length === 0) {
     return (
       <>
         <ScreenTitle>Your customers</ScreenTitle>
         <EmptyState
-          title="No customers yet"
-          body={`Add a household you have fitted a battery for. When their smart control has run for 30 days in a row, you earn £${REWARD_GBP}. Lumo can do the chasing, or you can.`}
+          title="Nothing here yet"
+          body="Send us your list of past battery customers and we will load it, clean it and show you exactly what happened to every one of them."
           action={
-            <Link to="add">
-              <Button>Add your first customer</Button>
+            <Link to="list">
+              <Button>Get your customers on</Button>
             </Link>
           }
         />
-        <p className="px-4 text-center text-[13px] text-ink-mute">
-          Nothing here is a forecast. You will only ever see households you have actually
-          added.
+        <p className="px-4 text-center text-[13px] text-ink-mute lg:px-0">
+          Nothing here is a forecast. You will only ever see households on a list you have
+          given us.
         </p>
       </>
     );
   }
 
+  const nothingSent = !company.campaignEmail.approved;
+
   return (
     <>
-      <ScreenTitle>Your customers</ScreenTitle>
+      <ScreenTitle count={rows.length}>Your customers</ScreenTitle>
 
-      <div className="grid grid-cols-3 gap-2 px-4">
-        <Stat value={attention} label="Need chasing" tone={attention > 0 ? 'alert' : 'plain'} />
-        <Stat value={earningCount(rows)} label="Earning" tone="good" />
-        <Stat value={gbp(summary.earnedGbp)} label="Yours so far" tone="good" />
+      {nothingSent ? (
+        <div className="px-4 lg:px-0">
+          <Callout
+            title="Nothing has been sent yet"
+            body={`Your list is loaded and cleaned. We are waiting on you to approve the email we send on your behalf — it is the only sign-off we will ask you for, and it covers all ${rows.length} households.`}
+            action={
+              <Link to="list">
+                <Button>Read it and approve</Button>
+              </Link>
+            }
+          />
+        </div>
+      ) : (
+        <SummaryStrip
+          items={[
+            { label: 'Need you', value: String(attention), tone: attention > 0 ? 'warn' : 'default' },
+            { label: 'Earning', value: String(earningCount(rows)), tone: 'accent' },
+            { label: 'Yours so far', value: gbp(summary.earnedGbp), tone: 'accent' },
+          ]}
+        />
+      )}
+
+      <div className="mt-4 space-y-3 px-4 lg:px-0">
+        {unmatched.length > 0 ? (
+          <Callout
+            tone="alarm"
+            title={`${gbp(unmatched.length * REWARD_GBP)} of yours is going to nobody`}
+            money={undefined}
+            body={`${
+              unmatched.length === 1
+                ? 'One household is'
+                : `${unmatched.length} households are`
+            } on Lumo and running, but came in on their own rather than through your campaign, so nothing ties them to you. It will not fix itself.`}
+            action={
+              <Button variant="secondary" onClick={() => setOpen(unmatched[0])}>
+                {unmatched.length === 1 ? 'Claim it' : `Claim ${unmatched.length}`}
+              </Button>
+            }
+          />
+        ) : null}
+
+        {/* No money figure on these, unlike the unmatched callout above. See the note
+            in `dataQualityGroups`: multiplying the count by £50 would price a fix at
+            a conversion rate nobody is going to hit. The rate is in the body copy,
+            per household, where it is true. */}
+        {quality.map((group) => (
+          <Callout
+            key={group.contact}
+            title={`${group.rows.length} ${group.label.toLowerCase()}`}
+            body={group.argument}
+            action={
+              <Button variant="secondary" onClick={() => setOpen(group.rows[0])}>
+                Start on these
+              </Button>
+            }
+          />
+        ))}
       </div>
 
-      {unmatched.length > 0 ? <UnmatchedCallout rows={unmatched} onOpen={setOpen} /> : null}
-
-      <div className="mt-5">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 px-4 lg:px-0">
         <SegmentedToggle<View>
           value={view}
           onChange={setView}
           options={[
-            { value: 'queue', label: 'Needs attention', count: attention },
+            { value: 'queue', label: 'Needs you', count: queueRows.length },
             { value: 'all', label: 'All', count: rows.length },
           ]}
         />
+        {silent && view === 'all' ? (
+          <p className="max-w-[52ch] text-[13px] text-ink-mute">
+            <span className="tnum font-semibold text-ink-soft">{silent.count}</span> were
+            delivered and never opened. We will not email those again — that is how a sending
+            domain dies, and it would slow the rest of your list down.
+          </p>
+        ) : null}
       </div>
 
-      {view === 'queue' ? (
-        groups.length === 0 ? (
-          <EmptyState
-            title="Nothing needs chasing"
-            body="Every household is either earning or waiting on something that resolves itself. This is the good outcome."
-            action={
-              <Button variant="secondary" onClick={() => setView('all')}>
-                See all {rows.length}
-              </Button>
-            }
-          />
+      {/* Desktop: one sortable table. */}
+      <div className="mt-3 hidden lg:block">
+        {tableRows.length === 0 ? (
+          <NothingToDo total={rows.length} onShowAll={() => setView('all')} />
         ) : (
-          groups.map((group) => (
-            <section key={group.owner}>
-              <SectionHeading count={group.rows.length}>
-                {OWNER_GROUP_HEADINGS[group.owner]}
-              </SectionHeading>
-              <Card className="mx-4 overflow-hidden">
-                <ul>
-                  {group.rows.map((row) => (
-                    <CustomerRowItem key={row.customer.id} row={row} onOpen={setOpen} />
-                  ))}
-                </ul>
-              </Card>
-            </section>
-          ))
-        )
-      ) : (
-        <section>
-          <SectionHeading count={rows.length}>Everyone you have added</SectionHeading>
-          <Card className="mx-4 overflow-hidden">
-            <ul>
-              {rows.map((row) => (
-                <CustomerRowItem key={row.customer.id} row={row} onOpen={setOpen} />
-              ))}
-            </ul>
-          </Card>
-        </section>
-      )}
+          <CustomerTable
+            rows={tableRows}
+            sort={sort}
+            direction={direction}
+            onSort={onSort}
+            onOpen={setOpen}
+          />
+        )}
+      </div>
 
-      <footer className="px-4 py-6 text-center">
-        <p className="text-[13px] text-ink-mute">
-          {installer.firstName} {installer.lastName} · {installer.company}
-        </p>
-        {dirty ? (
-          <Button variant="quiet" className="mt-1 h-9 text-[13px]" onClick={reset}>
-            Reset this demo
-          </Button>
-        ) : null}
-      </footer>
+      {/* Mobile: owner-grouped cards. No table, because a table at 390px is unreadable. */}
+      <div className="lg:hidden">
+        {view === 'queue' ? (
+          groups.length === 0 ? (
+            <NothingToDo total={rows.length} onShowAll={() => setView('all')} />
+          ) : (
+            groups.map((group) => (
+              <section key={group.owner}>
+                <SectionHeading count={group.rows.length}>
+                  {OWNER_GROUP_HEADINGS[group.owner]}
+                </SectionHeading>
+                <Card className="mx-4 overflow-hidden">
+                  <ul>
+                    {group.rows.map((row) => (
+                      <CustomerCard key={row.customer.id} row={row} onOpen={setOpen} />
+                    ))}
+                  </ul>
+                </Card>
+              </section>
+            ))
+          )
+        ) : (
+          <section>
+            <SectionHeading count={rows.length}>Everyone on your list</SectionHeading>
+            <Card className="mx-4 overflow-hidden">
+              <ul>
+                {sortRows(rows, 'priority', 'desc').map((row) => (
+                  <CustomerCard key={row.customer.id} row={row} onOpen={setOpen} />
+                ))}
+              </ul>
+            </Card>
+          </section>
+        )}
+      </div>
 
       <Sheet
         open={open !== null}
         title={open ? displayName(open.customer) : ''}
         onClose={() => setOpen(null)}
       >
-        {open ? <CustomerDetail row={open} /> : null}
+        {open ? (
+          <>
+            <Fixer row={open} onDone={() => setOpen(null)} />
+            <CustomerDetail row={open} />
+          </>
+        ) : null}
       </Sheet>
     </>
   );
 }
 
-function Stat({
-  value,
-  label,
-  tone,
-}: {
-  value: number | string;
-  label: string;
-  tone: 'plain' | 'good' | 'alert';
-}) {
-  const valueColour =
-    tone === 'good' ? 'text-accent' : tone === 'alert' ? 'text-ink' : 'text-ink-mute';
-  return (
-    <Card className="px-3 py-2.5">
-      <p className={`tnum text-[22px] font-bold leading-none ${valueColour}`}>{value}</p>
-      <p className="mt-1 text-[12px] font-semibold text-ink-soft">{label}</p>
-    </Card>
-  );
+/**
+ * The one place a row becomes editable, and only for the three things Lumo genuinely
+ * cannot resolve without the firm. Everything else in this product is read-only,
+ * which is the point.
+ */
+function Fixer({ row, onDone }: { row: CustomerRow; onDone: () => void }) {
+  if (row.resolved.track === 'match' && row.customer.match === 'unmatched_different_email') {
+    return <UnmatchedFixer row={row} onDone={onDone} />;
+  }
+  if (row.customer.contact === 'held_no_email' || row.customer.contact === 'held_unconfirmed') {
+    return <HeldRowFixer row={row} onDone={onDone} />;
+  }
+  return null;
 }
 
-/**
- * The one place the design breaks its own row pattern, deliberately.
- *
- * `unmatched_different_email` is the state that silently eats an installer's £50: the
- * household is on Lumo and earning, the installer did the work, and a row in a list
- * would look exactly like a lead that never converted. If a research participant has
- * to be pointed at this, it has failed.
- */
-function UnmatchedCallout({
-  rows,
-  onOpen,
-}: {
-  rows: readonly CustomerRow[];
-  onOpen: (row: CustomerRow) => void;
-}) {
-  const total = rows.length * REWARD_GBP;
-
+function NothingToDo({ total, onShowAll }: { total: number; onShowAll: () => void }) {
   return (
-    <section className="mx-4 mt-4 rounded-card border border-dead-fg/30 bg-dead-bg">
-      <div className="px-3 pt-3">
-        <p className="text-[15px] font-bold text-dead-fg">
-          {gbp(total)} of yours is going to nobody
-        </p>
-        <p className="mt-1 text-[14px] text-dead-fg/90">
-          {rows.length === 1 ? 'This household is' : `These ${rows.length} households are`} on
-          Lumo and running, but nothing ties {rows.length === 1 ? 'them' : 'them'} to you. It
-          will not fix itself.
-        </p>
-      </div>
-      <ul className="mt-2">
-        {rows.map((row) => (
-          <li key={row.customer.id}>
-            <button
-              onClick={() => onOpen(row)}
-              className="flex w-full items-center gap-3 border-t border-dead-fg/15 px-3 py-2.5 text-left"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[15px] font-semibold text-dead-fg">
-                  {displayName(row.customer)}
-                </span>
-                <span className="block truncate text-[13px] text-dead-fg/80">
-                  {row.resolved.state?.label}
-                </span>
-              </span>
-              <span className="text-[13px] font-semibold text-dead-fg underline">Fix</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <EmptyState
+      title="Nothing needs you"
+      body="Every household is either earning, waiting on something that resolves itself, or one we have stopped chasing. This is the good outcome."
+      action={
+        <Button variant="secondary" onClick={onShowAll}>
+          See all {total.toLocaleString('en-GB')}
+        </Button>
+      }
+    />
   );
 }

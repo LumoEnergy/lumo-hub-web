@@ -35,11 +35,14 @@ describe.each(tracks.map((t) => [t.name, t] as const))('%s track', (_name, track
     for (const id of track.order) {
       const state = track.states[id];
       if (state.disposition !== 'blocked') continue;
-      // Two blocked states have nothing to do, and both are terminal facts about the
-      // household rather than work: they opted out, or they reported the email. The
-      // correct action in each case is to leave them alone, so a blocker is still
-      // required but an action would be a lie.
-      if (id === 'unsubscribed' || id === 'complained') {
+      // Three blocked states carry no action. Two are terminal facts about the
+      // household rather than work — they opted out, or they reported the email — so
+      // the correct response is to leave them alone. The third, `no_response`, is a
+      // cohort rather than a task: it is the largest state in any campaign, and a
+      // per-row action repeated a hundred times would bury the rows that need one
+      // specific thing doing. All three still owe the installer an explanation, so a
+      // blocker is required and only the action is waived.
+      if (id === 'unsubscribed' || id === 'complained' || id === 'no_response') {
         expect(state.blocker, `${id} needs a blocker`).toBeTruthy();
         expect(state.action, `${id} must not recommend an action`).toBeNull();
         expect(state.owner, `${id} must be owned by nobody`).toBe('nobody');

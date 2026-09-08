@@ -1,7 +1,7 @@
 import { displayName } from '../fixtures';
 import {
   ACTIVATION,
-  INVITE,
+  CONTACT,
   MATCH,
   OWNER_LABELS,
   REWARD_GBP,
@@ -9,17 +9,23 @@ import {
 } from '../state';
 import type { CustomerRow as Row } from '../selectors/customers';
 import { moneyPosition } from '../selectors/customers';
-import { AgeChip, MoneyChip } from './ui';
+import { AgeChip, Missing, MoneyChip } from './ui';
 
 /**
  * One household, one line of why it matters.
  *
  * A household is in a state on all four tracks at once. Showing four badges moves
  * the work onto the installer, so the row shows the single nominated blocker and the
- * detail sheet shows everything. The age chip is the only coloured element, because
- * age is the dimension that decides whether this is a call today or a lost cause.
+ * detail shows everything. The age chip is the only coloured element, because age is
+ * the dimension that decides whether this is a call today or a lost cause — and it
+ * goes neutral when nobody can act, so the silent majority of a campaign does not
+ * paint the list orange for something nobody did wrong.
  */
-export function CustomerRowItem({ row, onOpen }: { row: Row; onOpen: (row: Row) => void }) {
+
+/** True when age should render neutral: nothing anyone does changes this row. */
+const ageIsMoot = (row: Row) => row.resolved.owner === 'nobody';
+
+export function CustomerCard({ row, onOpen }: { row: Row; onOpen: (row: Row) => void }) {
   const { customer, resolved } = row;
   const position = moneyPosition(row);
 
@@ -27,7 +33,7 @@ export function CustomerRowItem({ row, onOpen }: { row: Row; onOpen: (row: Row) 
     <li>
       <button
         onClick={() => onOpen(row)}
-        className="flex min-h-[56px] w-full items-center gap-3 border-b border-line bg-surface px-4 py-3 text-left last:border-b-0"
+        className="flex min-h-[64px] w-full items-center gap-3 border-b border-line bg-surface px-4 py-3 text-left last:border-b-0"
       >
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[16px] font-semibold text-ink">
@@ -44,7 +50,9 @@ export function CustomerRowItem({ row, onOpen }: { row: Row; onOpen: (row: Row) 
         {position === 'paid' || position === 'confirmed' ? (
           <MoneyChip>£{REWARD_GBP}</MoneyChip>
         ) : null}
-        {resolved.state ? <AgeChip days={resolved.ageDays} band={resolved.ageBand} /> : null}
+        {resolved.state ? (
+          <AgeChip days={resolved.ageDays} band={resolved.ageBand} muted={ageIsMoot(row)} />
+        ) : null}
 
         <ChevronIcon />
       </button>
@@ -53,9 +61,10 @@ export function CustomerRowItem({ row, onOpen }: { row: Row; onOpen: (row: Row) 
 }
 
 /**
- * The detail sheet. All four tracks, spelled out, because this is the only place the
- * full position is available and hiding it would make the row's single-state summary
- * feel like a guess.
+ * The detail. All four tracks, spelled out, because this is the only place the full
+ * position is available and hiding it would make the row's single-state summary feel
+ * like a guess. It also carries the audit fields — who supplied this household and on
+ * which import — which is the firm's own management data rather than Lumo's.
  */
 export function CustomerDetail({ row }: { row: Row }) {
   const { customer, resolved } = row;
@@ -87,13 +96,22 @@ export function CustomerDetail({ row }: { row: Row }) {
       <MoneyLine row={row} position={position} />
 
       <dl className="divide-y divide-line rounded-card border border-line">
-        <DetailRow label="Invite" value={detailLabel(row, 'invite')} />
-        <DetailRow label="Their setup" value={detailLabel(row, 'activation')} />
-        <DetailRow label="Matched to you" value={detailLabel(row, 'match')} />
-        <DetailRow label="Inverter" value={customer.inverterMake} />
-        <DetailRow label="Battery" value={`${customer.batterySizeKwh} kWh`} />
-        <DetailRow label="Email" value={customer.email ?? 'Not captured'} />
-        <DetailRow label="Added" value={customer.addedOn} />
+        <DetailRow label="Email" value={customer.email} fallback="Not on your list" />
+        <DetailRow label="Postcode" value={customer.postcode} fallback="postcode" />
+        <DetailRow label="Campaign" value={CONTACT.states[customer.contact].label} />
+        <DetailRow label="Their setup" value={ACTIVATION.states[customer.activation].label} />
+        <DetailRow
+          label="Credited to you"
+          value={customer.match === null ? 'No Lumo account yet' : MATCH.states[customer.match].label}
+        />
+        <DetailRow label="Inverter" value={customer.inverterMake} fallback="inverter make" />
+        <DetailRow
+          label="Battery"
+          value={customer.batterySizeKwh === null ? null : `${customer.batterySizeKwh} kWh`}
+          fallback="battery size"
+        />
+        <DetailRow label="Supplied by" value={customer.addedBy} />
+        <DetailRow label="On your list since" value={customer.importedOn} />
       </dl>
     </div>
   );
@@ -154,24 +172,21 @@ function MoneyLine({ row, position }: { row: Row; position: ReturnType<typeof mo
   );
 }
 
-/**
- * Labels come from the state model rather than being restated here, so the sheet
- * cannot drift from the generated copy table.
- */
-function detailLabel(row: Row, track: 'invite' | 'activation' | 'match'): string {
-  const { customer } = row;
-  if (track === 'invite') return INVITE.states[customer.invite].label;
-  if (track === 'activation') return ACTIVATION.states[customer.activation].label;
-  return customer.match === null
-    ? 'No Lumo account yet'
-    : MATCH.states[customer.match].label;
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({
+  label,
+  value,
+  fallback,
+}: {
+  label: string;
+  value: string | null;
+  fallback?: string;
+}) {
   return (
     <div className="flex items-baseline justify-between gap-4 px-3 py-2.5">
       <dt className="text-[13px] font-semibold text-ink-soft">{label}</dt>
-      <dd className="text-right text-[14px] text-ink">{value}</dd>
+      <dd className="text-right text-[14px] text-ink">
+        {value ?? <Missing label={fallback ?? label.toLowerCase()} />}
+      </dd>
     </div>
   );
 }
@@ -194,3 +209,5 @@ function ChevronIcon() {
     </svg>
   );
 }
+
+export { ageIsMoot };
