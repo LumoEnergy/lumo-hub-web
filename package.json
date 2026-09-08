@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "state-table": "node scripts/render-state-table.mjs",
+    "smoke": "node scripts/smoke-deploy.mjs",
     "check": "npm run lint && npm run test && npm run state-table -- --check"
   },
   "dependencies": {

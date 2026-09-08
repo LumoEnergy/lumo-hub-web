@@ -56,12 +56,22 @@ not the site root — the root 404s, which is intended. The path comes from `DEM
 every asset URL and showed a blank page on every screen: the SPA rewrite was answering
 asset requests with `index.html`, so the browser got `text/html` where it expected
 JavaScript. `npm run build` now runs `scripts/verify-build.mjs`, which fails the build if
-any URL in the built HTML has no matching file. When checking a deploy by hand, look at
-the content type and size, not the status code:
+any URL in the built HTML has no matching file. After deploying, render it:
 
 ```bash
-curl -sI https://lumo-hub-demo-dev-opt.web.app/d/3FgvdyiYBsD9/ | rg -i "^(HTTP|content-type)"
+npm run smoke
 ```
+
+That drives headless Chrome and asserts all three personas put the right content on the
+screen. Two traps it exists to avoid, both of which cost real time once:
+
+- **jsdom cannot check this.** It does not execute `<script type="module">`, so it reports
+  a blank page whether or not the page is blank. Do not use it to verify a deploy.
+- **`--window-size` below 500px lies.** Headless Chrome clamps the viewport to a 500px
+  minimum, so `--window-size=390,900` renders at 500px and hands back a 390px *crop*. It
+  looks exactly like a horizontal-overflow bug and is not one. The shell is a 480px
+  centred column, so 500px is the honest phone-width screenshot. If you genuinely need a
+  narrower viewport, use a CDP device-metrics override, not the flag.
 
 The hosting site `lumo-hub-demo-dev-opt` already exists. To recreate it:
 
