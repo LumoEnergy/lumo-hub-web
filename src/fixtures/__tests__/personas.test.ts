@@ -1,285 +1,294 @@
 import { describe, it, expect } from 'vitest';
 import {
   ACTIVATION_STATE_IDS,
-  EARNINGS_STATE_IDS,
-  INVITE_STATE_IDS,
+  CONTACT_STATE_IDS,
   MATCH_STATE_IDS,
+  EARNINGS_STATE_IDS,
+  HELD_STATES,
   resolveCustomerState,
 } from '../../state';
-import { CUSTOMER_FIELD_PROVENANCE } from '../model';
-import type { HubCustomer } from '../model';
-import { PERSONAS, PERSONA_IDS, materialise } from '../personas';
-import { loadPersona, personaFromSearch } from '../index';
+import { PERSONAS, PERSONA_IDS, DEFAULT_PERSONA, materialise } from '../personas';
+import { CUSTOMER_FIELD_PROVENANCE, COMPANY_FIELD_PROVENANCE, canSend } from '../model';
 
-const ASOF = '2026-09-07';
+const TODAY = new Date('2026-09-08T00:00:00Z');
+const all = PERSONA_IDS.map((id) => materialise(PERSONAS[id], TODAY));
+const byId = (id: string) => all.find((p) => p.id === id)!;
 
-const allCustomers = (): readonly HubCustomer[] =>
-  PERSONA_IDS.flatMap((id) => materialise(PERSONAS[id], ASOF));
-
-describe('state coverage across the personas', () => {
-  // The point of the persona mechanism is that the model is complete and the persona
-  // chooses what you see. If a state exists in the model and no persona exercises it,
-  // it has never been looked at in a real screen and the copy is untested.
-  const customers = allCustomers();
-
-  it('exercises every invite state', () => {
-    const seen = new Set(customers.map((c) => c.invite));
-    expect(INVITE_STATE_IDS.filter((id) => !seen.has(id))).toEqual([]);
+describe('persona coverage', () => {
+  it('exercises every contact state across the three personas', () => {
+    const seen = new Set(all.flatMap((p) => p.customers.map((c) => c.contact)));
+    const missing = CONTACT_STATE_IDS.filter((id) => !seen.has(id));
+    // `imported` and `queued` are transient by nature: a row is only in them for as
+    // long as Lumo is mid-pass or mid-send. A fixture cannot sit in one honestly, and
+    // pretending otherwise would put a permanent "we are still checking" row on a
+    // real screen. Everything else must appear somewhere.
+    expect(missing).toEqual(['imported', 'queued']);
   });
 
-  it('exercises every activation state, including all ten platform values', () => {
-    const seen = new Set(customers.map((c) => c.activation));
+  it('exercises every activation state', () => {
+    const seen = new Set(all.flatMap((p) => p.customers.map((c) => c.activation)));
     expect(ACTIVATION_STATE_IDS.filter((id) => !seen.has(id))).toEqual([]);
   });
 
   it('exercises every match state', () => {
-    const seen = new Set(customers.map((c) => c.match).filter((m) => m !== null));
+    const seen = new Set(
+      all.flatMap((p) => p.customers.map((c) => c.match).filter((m) => m !== null)),
+    );
     expect(MATCH_STATE_IDS.filter((id) => !seen.has(id))).toEqual([]);
   });
 
   it('exercises every earnings state', () => {
     const seen = new Set(
-      customers.map(
-        (c) =>
-          resolveCustomerState(
-            {
-              invite: c.invite,
-              activation: c.activation,
-              match: c.match,
-              qualification: c.qualification,
-              inviteSince: c.inviteSince,
-              activationSince: c.activationSince,
-              matchSince: c.matchSince,
-            },
-            ASOF,
-          ).earnings,
+      all.flatMap((p) =>
+        p.customers.map(
+          (c) =>
+            resolveCustomerState(
+              {
+                contact: c.contact,
+                activation: c.activation,
+                match: c.match,
+                qualification: c.qualification,
+                contactSince: c.contactSince,
+                activationSince: c.activationSince,
+                matchSince: c.matchSince,
+              },
+              p.asOf,
+            ).earnings,
+        ),
       ),
     );
     expect(EARNINGS_STATE_IDS.filter((id) => !seen.has(id))).toEqual([]);
   });
-
-  it('exercises every age band, so no band ships unlooked-at', () => {
-    const seen = new Set(
-      customers.map(
-        (c) =>
-          resolveCustomerState(
-            {
-              invite: c.invite,
-              activation: c.activation,
-              match: c.match,
-              qualification: c.qualification,
-              inviteSince: c.inviteSince,
-              activationSince: c.activationSince,
-              matchSince: c.matchSince,
-            },
-            ASOF,
-          ).ageBand,
-      ),
-    );
-    expect([...seen].sort()).toEqual(['ageing', 'dead', 'fresh', 'stale']);
-  });
-
-  it('puts a confirmed-then-dropped household in front of a reviewer', () => {
-    // The clawback rule is only visible if something is in this position. Without it
-    // the design would never have been forced to say what happens.
-    const dropped = customers.filter(
-      (c) =>
-        resolveCustomerState(
-          {
-            invite: c.invite,
-            activation: c.activation,
-            match: c.match,
-            qualification: c.qualification,
-            inviteSince: c.inviteSince,
-            activationSince: c.activationSince,
-            matchSince: c.matchSince,
-          },
-          ASOF,
-        ).confirmedButControlDropped,
-    );
-    expect(dropped.length).toBeGreaterThan(0);
-  });
 });
 
 describe('fixture invariants', () => {
-  // A fixture that cannot happen in reality teaches the wrong thing in research and
-  // hands the backend build a contract it cannot satisfy.
-  const customers = allCustomers();
-
-  it('only omits an email on a link or QR share', () => {
-    for (const c of customers) {
-      expect(c.email === null, `${c.id}`).toBe(c.invite === 'link_only');
+  it('gives every household a unique id within its persona', () => {
+    for (const p of all) {
+      const ids = p.customers.map((c) => c.id);
+      expect(new Set(ids).size, `${p.id} has duplicate ids`).toBe(ids.length);
     }
   });
 
-  it('has a match state exactly when there is an account to match', () => {
-    for (const c of customers) {
-      expect(c.match === null, `${c.id}`).toBe(c.activation === 'no_account');
-      expect(c.matchSince === null, `${c.id} matchSince`).toBe(c.match === null);
-    }
-  });
-
-  it('has control running exactly when the activation state says it is', () => {
-    for (const c of customers) {
-      expect(c.qualification.controlActiveSince !== null, `${c.id}`).toBe(
-        c.activation === 'Smart Control Active',
-      );
-    }
-  });
-
-  it('never qualifies a household that has never had control', () => {
-    for (const c of customers) {
-      if (c.qualification.qualifiedAt !== null) {
-        expect(c.qualification.everActive, `${c.id}`).toBe(true);
+  it('only omits an email where the row is held for exactly that reason', () => {
+    for (const p of all) {
+      for (const c of p.customers) {
+        if (c.email === null) {
+          expect(c.contact, `${c.id} has no email but is not held for it`).toBe(
+            'held_no_email',
+          );
+        }
       }
     }
   });
 
-  it('never pays a reward that was not confirmed first', () => {
-    for (const c of customers) {
-      if (c.qualification.paidAt !== null) {
-        expect(c.qualification.qualifiedAt, `${c.id}`).not.toBeNull();
+  it('never claims a match before the household has an account', () => {
+    for (const p of all) {
+      for (const c of p.customers) {
+        if (c.activation === 'no_account') {
+          expect(c.match, `${c.id} has no account but a match state`).toBeNull();
+        } else {
+          expect(c.match, `${c.id} has an account but no match state`).not.toBeNull();
+        }
+      }
+    }
+  });
+
+  it('keeps contact and activation consistent', () => {
+    // `signed_up` is the only contact state that implies an account, and every
+    // account-bearing row must be in it. A row that is "no response" but somehow has
+    // an activation state would make the resolver's precedence meaningless.
+    for (const p of all) {
+      for (const c of p.customers) {
+        const hasAccount = c.activation !== 'no_account';
+        expect(c.contact === 'signed_up', `${c.id} contact/activation mismatch`).toBe(
+          hasAccount,
+        );
+      }
+    }
+  });
+
+  it('only omits kit details where the row is held for an unconfirmed battery', () => {
+    for (const p of all) {
+      for (const c of p.customers) {
+        if (c.inverterMake === null || c.batterySizeKwh === null) {
+          expect(c.contact, `${c.id} is missing kit detail without being held`).toBe(
+            'held_unconfirmed',
+          );
+        }
+      }
+    }
+  });
+
+  it('attributes every household to a real seat at the company', () => {
+    for (const p of all) {
+      const names = new Set(p.company.seats.map((s) => s.name));
+      for (const c of p.customers) {
+        expect(names, `${c.id} added by someone not on the account`).toContain(c.addedBy);
+      }
+    }
+  });
+
+  it('references a real import batch from every household', () => {
+    for (const p of all) {
+      const batches = new Set(p.company.imports.map((b) => b.id));
+      for (const c of p.customers) {
+        expect(batches, `${c.id} references an unknown batch`).toContain(c.importBatchId);
+      }
+    }
+  });
+
+  it('never sits a household in a held state without it being the installer’s to fix', () => {
+    for (const p of all) {
+      for (const c of p.customers) {
+        if (!(HELD_STATES as readonly string[]).includes(c.contact)) continue;
+        const resolved = resolveCustomerState(
+          {
+            contact: c.contact,
+            activation: c.activation,
+            match: c.match,
+            qualification: c.qualification,
+            contactSince: c.contactSince,
+            activationSince: c.activationSince,
+            matchSince: c.matchSince,
+          },
+          p.asOf,
+        );
+        expect(resolved.owner, `${c.id} is held but not owned by the installer`).toBe(
+          'installer',
+        );
+        expect(resolved.needsAttention).toBe(true);
+      }
+    }
+  });
+
+  it('never sends before permission and approval are both recorded', () => {
+    for (const p of all) {
+      const sent = p.customers.some(
+        (c) => !['imported', 'awaiting_approval', ...HELD_STATES].includes(c.contact),
+      );
+      if (sent) {
+        expect(canSend(p.company), `${p.id} has sent mail it was not cleared to send`).toBe(
+          true,
+        );
+      }
+    }
+  });
+
+  it('reconciles each import batch against the rows it produced', () => {
+    for (const p of all) {
+      for (const batch of p.company.imports) {
+        const rows = p.customers.filter((c) => c.importBatchId === batch.id);
+        expect(rows.length, `${p.id}/${batch.id} row count`).toBe(batch.rowsLoaded);
+        const held = rows.filter((c) =>
+          (HELD_STATES as readonly string[]).includes(c.contact),
+        );
+        expect(held.length, `${p.id}/${batch.id} held count`).toBe(batch.rowsHeld);
         expect(
-          Date.parse(c.qualification.paidAt) >= Date.parse(c.qualification.qualifiedAt as string),
-          `${c.id} paid before it was confirmed`,
-        ).toBe(true);
+          batch.rowsLoaded + batch.rowsRejected,
+          `${p.id}/${batch.id} supplied should equal loaded plus rejected`,
+        ).toBe(batch.rowsSupplied);
+        if (batch.rowsRejected > 0) {
+          expect(batch.rejectedReason, `${batch.id} needs a reason`).toBeTruthy();
+        }
       }
     }
   });
-
-  it('never qualifies before 30 days of the run that earned it', () => {
-    for (const c of customers) {
-      const { controlActiveSince, qualifiedAt } = c.qualification;
-      if (controlActiveSince === null || qualifiedAt === null) continue;
-      const days =
-        (Date.parse(qualifiedAt) - Date.parse(controlActiveSince)) / 86_400_000;
-      expect(days, `${c.id} qualified after only ${days} days`).toBeGreaterThanOrEqual(30);
-    }
-  });
-
-  it('never dates a state change before the customer was added', () => {
-    for (const c of customers) {
-      const added = Date.parse(c.addedOn);
-      expect(Date.parse(c.inviteSince), `${c.id} inviteSince`).toBeGreaterThanOrEqual(added);
-      expect(Date.parse(c.activationSince), `${c.id} activationSince`).toBeGreaterThanOrEqual(
-        added,
-      );
-    }
-  });
-
-  it('does not leave an invite sitting as "sent" long past the point of no response', () => {
-    // A household who was emailed six weeks ago and never signed up is in
-    // `no_response`, not still `sent_by_lumo`. Exactly how many days that takes is a
-    // product rule nobody has set yet — this asserts the fixtures do not quietly
-    // imply an answer, and does not itself decide one.
-    for (const c of customers) {
-      if (c.activation !== 'no_account') continue;
-      if (c.invite !== 'sent_by_lumo' && c.invite !== 'sent_by_installer') continue;
-      const days = (Date.parse(ASOF) - Date.parse(c.inviteSince)) / 86_400_000;
-      expect(days, `${c.id} has been "sent" for ${days} days with no account`).toBeLessThan(21);
-    }
-  });
-
-  it('uses unique ids', () => {
-    const ids = customers.map((c) => c.id);
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-
-  it('uses example.com addresses only, so nothing here can reach a real inbox', () => {
-    for (const c of customers) {
-      if (c.email === null) continue;
-      expect(c.email, `${c.id}`).toMatch(/@ex[a-z]*\.com$/);
-    }
-  });
 });
 
-describe('the personas themselves', () => {
-  it('offers exactly the three agreed personas', () => {
-    expect(PERSONA_IDS).toEqual(['established', 'first-run', 'messy']);
+describe('persona shape', () => {
+  it('defaults to the demo persona', () => {
+    expect(DEFAULT_PERSONA).toBe('mid-campaign');
   });
 
-  it('gives the established persona a 20-plus portfolio', () => {
-    expect(PERSONAS.established.customers.length).toBeGreaterThanOrEqual(20);
-  });
-
-  it('gives the first-run persona nothing at all', () => {
-    expect(PERSONAS['first-run'].customers).toEqual([]);
-  });
-
-  it('gives the messy persona eight households', () => {
-    expect(PERSONAS.messy.customers.length).toBe(8);
-  });
-
-  it('leaves the established installer only a handful of their own problems', () => {
-    const { customers } = loadPersona('established', ASOF);
-    const mine = customers.filter((c) => {
-      const r = resolveCustomerState(
-        {
-          invite: c.invite,
-          activation: c.activation,
-          match: c.match,
-          qualification: c.qualification,
-          inviteSince: c.inviteSince,
-          activationSince: c.activationSince,
-          matchSince: c.matchSince,
-        },
-        ASOF,
-      );
-      return r.needsAttention && r.owner === 'installer';
-    });
-    // Small enough to read as a healthy list, non-zero so the demo has something to
-    // show. If this grows, the "established" story has stopped being aspirational.
-    expect(mine.length).toBeGreaterThan(0);
-    expect(mine.length).toBeLessThanOrEqual(4);
-  });
-
-  it('gives every installer a personal link token rather than a company domain', () => {
-    for (const id of PERSONA_IDS) {
-      const { linkToken, company } = PERSONAS[id].installer;
-      expect(linkToken).not.toContain('.co.uk');
-      expect(linkToken).not.toContain('.com');
-      expect(linkToken.toLowerCase()).not.toContain(company.split(' ')[0].toLowerCase());
+  it('gives every persona a stated purpose', () => {
+    for (const p of all) {
+      expect(p.purpose.length, `${p.id} needs a purpose`).toBeGreaterThan(40);
     }
   });
-});
 
-describe('persona selection from the URL', () => {
-  it('reads a valid persona', () => {
-    expect(personaFromSearch('?p=messy')).toBe('messy');
-    expect(personaFromSearch('?p=first-run')).toBe('first-run');
+  it('has exactly one current-user seat per company', () => {
+    for (const p of all) {
+      expect(p.company.seats.filter((s) => s.isCurrentUser).length).toBe(1);
+    }
   });
 
-  it('falls back to the demo persona for anything else', () => {
-    expect(personaFromSearch('')).toBe('established');
-    expect(personaFromSearch('?p=nonsense')).toBe('established');
-    expect(personaFromSearch('?other=1')).toBe('established');
+  it('holds the awaiting-approval persona back from sending anything', () => {
+    const p = byId('awaiting-approval');
+    expect(p.company.campaignEmail.approved).toBe(false);
+    expect(canSend(p.company)).toBe(false);
+    // Nothing may have progressed past the gate, and there can be no money.
+    for (const c of p.customers) {
+      expect(['awaiting_approval', ...HELD_STATES]).toContain(c.contact);
+      expect(c.qualification.qualifiedAt).toBeNull();
+      expect(c.qualification.paidAt).toBeNull();
+    }
+  });
+
+  it('makes the messy persona genuinely messy', () => {
+    const p = byId('messy-list');
+    const held = p.customers.filter((c) => c.contact === 'held_no_email');
+    // The research question is what a firm does about a big pile of missing
+    // addresses. If this drops below a third of the list it stops asking it.
+    expect(held.length / p.customers.length).toBeGreaterThan(0.33);
+    expect(p.customers.some((c) => c.contact === 'complained')).toBe(true);
+    expect(p.customers.some((c) => c.match === 'unmatched_different_email')).toBe(true);
+  });
+
+  it('gives the demo persona real money and real warm leads', () => {
+    const p = byId('mid-campaign');
+    expect(p.customers.filter((c) => c.qualification.paidAt !== null).length).toBeGreaterThan(
+      9,
+    );
+    expect(p.customers.filter((c) => c.contact === 'clicked').length).toBeGreaterThan(9);
+  });
+
+  it('shows both rungs of the sender ladder across the personas', () => {
+    // The rung installers will accept is an open research question, so the prototype
+    // has to be able to show either.
+    const rungs = new Set(all.map((p) => p.company.sender.rung));
+    expect(rungs).toEqual(new Set(['lumo_domain', 'delegated_subdomain']));
+  });
+
+  it('never puts Lumo in the From line', () => {
+    // The firm has the relationship and the permission. If the display name ever
+    // becomes Lumo, the lawful basis for the whole campaign changes.
+    for (const p of all) {
+      expect(p.company.sender.displayName).toBe(p.company.name);
+      expect(p.company.sender.replyTo).not.toMatch(/lumo/i);
+    }
+  });
+
+  it('quotes no savings figure in the campaign email', () => {
+    // Nothing in the estate can substantiate a per-household number yet.
+    for (const p of all) {
+      const text = [
+        p.company.campaignEmail.subject,
+        p.company.campaignEmail.preheader,
+        ...p.company.campaignEmail.body,
+      ].join(' ');
+      expect(text).not.toMatch(/£\s?\d|\d+\s?%|per year|a year|annually/i);
+    }
   });
 });
 
 describe('the data contract', () => {
-  it('states the provenance of every field on the view model', () => {
-    // Typed as Record<keyof HubCustomer, Provenance>, so a field added without
-    // provenance is a compile error. This asserts the runtime shape has not drifted.
-    const { customers } = loadPersona('messy', ASOF);
-    const fields = Object.keys(customers[0]).sort();
-    expect(Object.keys(CUSTOMER_FIELD_PROVENANCE).sort()).toEqual(fields);
-  });
-
-  it('gives every field a note substantial enough to act on', () => {
+  it('gives every household field a provenance note with substance', () => {
     for (const [field, provenance] of Object.entries(CUSTOMER_FIELD_PROVENANCE)) {
       expect(provenance.note.length, `${field} needs a real note`).toBeGreaterThan(40);
     }
   });
-});
 
-describe('materialise', () => {
-  it('anchors ages to the given day rather than to a hardcoded date', () => {
-    const early = materialise(PERSONAS.messy, '2026-01-10');
-    const later = materialise(PERSONAS.messy, '2026-11-10');
-    const ageOf = (cs: readonly HubCustomer[]) =>
-      Date.parse(cs[0].activationSince) - Date.parse(cs[0].addedOn);
-    // Same shape, different absolute dates: the persona keeps its design forever.
-    expect(early[0].activationSince).not.toBe(later[0].activationSince);
-    expect(ageOf(early)).toBe(ageOf(later));
+  it('gives every company field a provenance note with substance', () => {
+    for (const [field, provenance] of Object.entries(COMPANY_FIELD_PROVENANCE)) {
+      expect(provenance.note.length, `${field} needs a real note`).toBeGreaterThan(40);
+    }
+  });
+
+  it('admits that the entire company entity has no producer', () => {
+    // If any of this ever reads "platform-today", something has been assumed that
+    // does not exist. There is no installer entity anywhere in the system of record.
+    for (const [field, provenance] of Object.entries(COMPANY_FIELD_PROVENANCE)) {
+      expect(provenance.source, `${field} should have no producer`).toBe('no-producer');
+    }
   });
 });

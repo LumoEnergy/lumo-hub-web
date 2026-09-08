@@ -35,9 +35,16 @@ describe.each(tracks.map((t) => [t.name, t] as const))('%s track', (_name, track
     for (const id of track.order) {
       const state = track.states[id];
       if (state.disposition !== 'blocked') continue;
-      // Unsubscribed is the one blocked state with nothing to do: the household has
-      // opted out and the correct action is to leave them alone.
-      if (id === 'unsubscribed') continue;
+      // Two blocked states have nothing to do, and both are terminal facts about the
+      // household rather than work: they opted out, or they reported the email. The
+      // correct action in each case is to leave them alone, so a blocker is still
+      // required but an action would be a lie.
+      if (id === 'unsubscribed' || id === 'complained') {
+        expect(state.blocker, `${id} needs a blocker`).toBeTruthy();
+        expect(state.action, `${id} must not recommend an action`).toBeNull();
+        expect(state.owner, `${id} must be owned by nobody`).toBe('nobody');
+        continue;
+      }
       expect(state.blocker, `${id} needs a blocker`).toBeTruthy();
       expect(state.action, `${id} needs an action`).toBeTruthy();
     }
@@ -97,7 +104,7 @@ describe.each(tracks.map((t) => [t.name, t] as const))('%s track', (_name, track
 describe('the model as a whole', () => {
   it('has four tracks, because the UI has to make their combination legible', () => {
     expect(tracks.map((t) => t.name)).toEqual([
-      'Invite',
+      'Contact',
       'Household activation',
       'Match',
       'Earnings',

@@ -10,8 +10,14 @@
 export type { Owner, Disposition, StateDefinition, StateTrack } from './types';
 export { OWNER_LABELS, OWNER_GROUP_HEADINGS, OWNER_QUEUE_ORDER } from './types';
 
-export type { InviteStateId } from './invite';
-export { INVITE, INVITE_STATE_IDS, inviteState } from './invite';
+export type { ContactStateId } from './contact';
+export {
+  CONTACT,
+  CONTACT_STATE_IDS,
+  HELD_STATES,
+  contactState,
+  isPreSignup,
+} from './contact';
 
 export type { ActivationStateId } from './activation';
 export {
@@ -45,13 +51,13 @@ export { PRODUCER_GAPS, producerGapsFor } from './producerGaps';
 export type { TrackPosition, ResolvedState, BlockerTrack } from './resolve';
 export { resolveCustomerState, earningsDefinitionFor } from './resolve';
 
-import { INVITE } from './invite';
+import { CONTACT } from './contact';
 import { ACTIVATION } from './activation';
 import { MATCH } from './match';
 import { EARNINGS } from './earnings';
 
 /**
- * Every track, in the order they read on a row: how they heard, where they got to,
- * whether we can tie them to you, and what it is worth.
+ * Every track, in the order they read on a row: what happened to the email, where
+ * the household got to, whether we can tie them to the firm, and what it is worth.
  */
-export const TRACKS = [INVITE, ACTIVATION, MATCH, EARNINGS] as const;
+export const TRACKS = [CONTACT, ACTIVATION, MATCH, EARNINGS] as const;

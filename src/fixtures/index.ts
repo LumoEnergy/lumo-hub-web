@@ -1,13 +1,25 @@
 import { DEFAULT_PERSONA, PERSONAS, PERSONA_IDS, materialise } from './personas';
-import type { Persona, PersonaId } from './personas';
-import type { HubCustomer } from './model';
+import type { MaterialisedPersona, PersonaId } from './personas';
 
-export type { PersonaId, Persona } from './personas';
-export type { HubCustomer, Provenance, ProvenanceSource } from './model';
+export type { PersonaId, Persona, MaterialisedPersona } from './personas';
+export type {
+  HubCustomer,
+  HubCompany,
+  HubSeat,
+  ImportBatch,
+  CampaignEmail,
+  SenderConfig,
+  Attestation,
+  Provenance,
+  ProvenanceSource,
+} from './model';
 export {
   CUSTOMER_FIELD_PROVENANCE,
+  COMPANY_FIELD_PROVENANCE,
   displayName,
   fieldsWithNoProducer,
+  currentSeat,
+  canSend,
 } from './model';
 export { PERSONAS, PERSONA_IDS, DEFAULT_PERSONA, materialise } from './personas';
 
@@ -30,17 +42,13 @@ export const isPersonaId = (value: string | null): value is PersonaId =>
  *
  * The parameter is short and unremarkable on purpose. In a research session the
  * installer should be looking at a product, not at a demo harness, and `?p=messy` in
- * a mobile address bar reads as noise.
+ * an address bar reads as noise.
  */
 export function personaFromSearch(search: string): PersonaId {
   const value = new URLSearchParams(search).get('p');
   return isPersonaId(value) ? value : DEFAULT_PERSONA;
 }
 
-export function loadPersona(id: PersonaId, asOf: string = today()): {
-  persona: Persona;
-  customers: readonly HubCustomer[];
-} {
-  const persona = PERSONAS[id];
-  return { persona, customers: materialise(persona, asOf) };
+export function loadPersona(id: PersonaId, today: Date = new Date()): MaterialisedPersona {
+  return materialise(PERSONAS[id], today);
 }

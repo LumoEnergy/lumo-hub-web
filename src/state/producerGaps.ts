@@ -8,6 +8,20 @@
  *
  * Do not remove an entry to make a screen simpler. If a gap closes, close it because
  * a producer now exists, and say which one.
+ *
+ * THE SHAPE OF THIS REGISTER CHANGED when the product became a back-book campaign
+ * owned by a company rather than a set of invites sent by an individual. Two gaps
+ * were rewritten rather than edited, and the reasons are worth keeping:
+ *
+ *   - `installer_company_entity` replaced a gap that asked for a per-person
+ *     attribution token. Lumo's customer is the firm; the firm decides internally
+ *     whether an engineer gets a cut. What the platform still needs per person is an
+ *     audit field ("who added this row"), because "which of my crews actually
+ *     registers customers" is the most useful management view the Hub can offer —
+ *     but that is a column, not an identity to pay.
+ *   - `campaign_lifecycle` replaced an invite gap. The unit is a list, not a
+ *     household, and the missing producer is a real ESP integration with real
+ *     delivery feedback.
  */
 
 export interface ProducerGap {
@@ -27,55 +41,92 @@ export interface ProducerGap {
 
 export const PRODUCER_GAPS: readonly ProducerGap[] = [
   {
-    id: 'invite_lifecycle',
-    concept: 'An invite that has a delivery state',
+    id: 'campaign_lifecycle',
+    concept: 'A campaign send with real delivery feedback',
     statesAffected: [
-      'added',
-      'staged_for_lumo',
-      'sent_by_lumo',
-      'sent_by_installer',
-      'link_only',
-      'no_response',
+      'queued',
+      'sent',
+      'opened',
+      'clicked',
       'bounced',
+      'no_response',
       'unsubscribed',
+      'complained',
     ],
     whyMissing:
-      'Until now nothing tracked an invite. There is no invite entity, no send, and no delivery feedback anywhere in the estate.',
+      'Nothing tracks an outbound send to a household. There is no campaign entity, no send, and no delivery feedback anywhere in the estate.',
     whatTheRealBuildMustCreate:
-      'An invite record with a real send, a real delivery/bounce/unsubscribe signal from the mail provider, and an age. The "Lumo will contact them" proposition is undeliverable without it.',
+      'A campaign with a per-household send record, plus a webhook consumer for the mail provider’s delivered, bounced, opened, clicked, unsubscribed and complained events. Without the bounce and complaint events specifically there is no way to protect the sending domain, and without click events there is no way to identify the warm leads that are the installer’s reason to engage at all.',
     evidence:
-      "The live Hub sets lumo_homeowner_email_invite_status = 'Email pending' on both add paths and nothing ever moves it. Its transactional email registry holds one template, admin-auth-alert, which is installer auth. Where real contacts read 'Email sent', a human typed it.",
+      "The live Hub sets lumo_homeowner_email_invite_status = 'Email pending' on create and nothing ever moves it. Its transactional email registry holds one template, admin-auth-alert, which is installer auth. Where real contacts read 'Email sent', a human typed it.",
+    blocksRealBuild: true,
+  },
+  {
+    id: 'list_import',
+    concept: 'An import batch with data-quality outcomes',
+    statesAffected: ['imported', 'held_no_email', 'held_unconfirmed', 'awaiting_approval'],
+    whyMissing:
+      'There is no bulk ingestion path for installer-supplied households, and no concept of a row that was received but held back as unusable.',
+    whatTheRealBuildMustCreate:
+      'An import batch entity recording who supplied it, when, how many rows arrived, and a per-row outcome — loaded, held for a missing address, held pending a battery confirmation, or rejected as a duplicate. The held outcomes matter most: they are the only work the product asks an installer to do, so they have to be a real queryable state rather than a spreadsheet a human at Lumo keeps.',
+    evidence:
+      'Nothing in lumo-api, Firestore or the Hub ingests a list. The first imports will be done by hand by Lumo staff, which is the right call for the first few installers and precisely why the resulting rows still need a real home.',
     blocksRealBuild: true,
   },
   {
     id: 'account_matching',
-    concept: 'A join between an invited email and a Lumo account',
+    concept: 'A join between a contacted household and a Lumo account',
     statesAffected: [
-      'matched_email',
-      'matched_link',
+      'matched_import',
+      'matched_manual',
       'unmatched_different_email',
       'ambiguous',
+      'signed_up',
       'no_account',
     ],
     whyMissing:
-      'Nothing reconciles the address an installer typed against the address a household signed up with, so a mismatch is indistinguishable from a lead that never converted.',
+      'Nothing reconciles the household an installer supplied against the household that signed up, so a mismatch is indistinguishable from a lead that never converted.',
     whatTheRealBuildMustCreate:
-      'A matching step with an explicit unmatched outcome and a way to resolve it, plus an ambiguity outcome that refuses to guess. Silent non-matching is the failure mode that eats the reward.',
+      'A per-household token minted at import, carried through the campaign email and the signup flow, so attribution is a fact rather than an inference. Plus an explicit unmatched outcome with a way to resolve it, and an ambiguity outcome that refuses to guess. Silent non-matching is the failure mode that eats the reward.',
     evidence:
       'There is no such join in lumo-api, Firestore or the Hub. The only signal that a household came from an installer is a free-text CRM property.',
     blocksRealBuild: true,
   },
   {
-    id: 'installer_identity',
-    concept: 'An installer entity, and a per-person attribution link',
-    statesAffected: ['matched_link', 'link_only'],
+    id: 'installer_company_entity',
+    concept: 'An installer company account, with seats and an added-by audit field',
+    statesAffected: ['matched_import', 'matched_manual'],
     whyMissing:
       'There is no installer entity anywhere in the system of record. The only installer-to-household link in the whole estate is partnerTag: a ?partner= URL parameter, cached in the browser, validated server-side only as a string of 1 to 100 characters. lumo-api has no concept of an installer at all.',
     whatTheRealBuildMustCreate:
-      'An installer entity in Postgres with real identifiers, a verified household association, and a token that identifies a person or a job rather than an email domain. The incentive only works if you can pay the individual who did the work, and attribution cannot be a string the customer can type.',
+      'A company entity in Postgres with real identifiers, multiple user seats under it, a verified household association, and an added-by field on every household row. The money is owed to the company; the added-by field exists so the company can manage its own people. Attribution cannot be a string the customer can type.',
     evidence:
-      'Production partnerTag values include gbsolar.co.uk, GB_Solar_Ltd, not_sure and test_installer_01. The same firm is counted twice. The 2026-08-06 review named this as the blocker on the entire installer roadmap, independent of where the UI is built.',
+      'Production partnerTag values include gbsolar.co.uk, GB_Solar_Ltd, not_sure and test_installer_01. The same firm is counted twice, which is what happens when identity is a free-text field rather than an entity.',
     blocksRealBuild: true,
+  },
+  {
+    id: 'contact_permission',
+    concept: 'A recorded attestation that the back-book agreed to be contacted',
+    statesAffected: ['awaiting_approval', 'queued', 'complained'],
+    whyMissing:
+      'Nothing records permission to contact a household, because nothing has ever contacted one.',
+    whatTheRealBuildMustCreate:
+      'An attestation on the company account: who confirmed that their customers agreed to be contacted about products relating to their installation, when, and covering which import. It is the lawful basis for the whole campaign — Lumo sends as a processor on the installer’s instruction, relying on the installer’s own relationship with the household — so it needs to be an auditable record, not a checkbox whose value is discarded. It also protects the sending domain: a list without real permission generates the complaints that get every installer’s campaign filtered.',
+    evidence:
+      'No consent or permission artefact exists in the estate for installer-sourced households. A data processing agreement per installer is the contractual half of this and is not a product feature, but nothing should send before both exist.',
+    blocksRealBuild: true,
+  },
+  {
+    id: 'sender_identity',
+    concept: 'Per-installer sender configuration',
+    statesAffected: ['awaiting_approval', 'queued', 'sent'],
+    whyMissing:
+      'All outbound mail today is Lumo-branded transactional email from a single domain. There is no notion of sending on another party’s behalf.',
+    whatTheRealBuildMustCreate:
+      'A sender config per company: display name and reply-to at minimum, and optionally a verified sending subdomain the installer delegates by publishing DKIM and SPF records in their own DNS. The delegated form is authenticated and consented, which is what distinguishes it from spoofing — DMARC passes precisely because the domain owner published the key. Campaign mail must also leave from a domain entirely separate from the app’s transactional mail, so a bad list cannot take down password resets and control alerts with it.',
+    evidence:
+      'The estate has one transactional sending identity and one template. Sending thousands of campaign emails from it would put every installer’s campaign and the app’s own mail behind the same reputation.',
+    blocksRealBuild: false,
   },
 ];
 

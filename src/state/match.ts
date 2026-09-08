@@ -1,26 +1,35 @@
 import type { StateDefinition, StateTrack } from './types';
 
 /**
- * Match state — whether the household an installer added is the same household that
- * turned up on the platform.
+ * Match state — whether the household on the installer's list is the same household
+ * that turned up on the platform.
  *
- * `unmatched_different_email` is the state that matters. It is the one that silently
- * eats an installer's £50: the household is on Lumo and earning, the installer did
- * the work, and the row sits there looking like a lead that never converted. It gets
- * a visible treatment rather than a row that quietly never progresses.
+ * THIS TRACK GOT SIMPLER WHEN THE PRODUCT BECAME A CAMPAIGN. Previously an installer
+ * shared one generic link, so a household could only be tied to them by guessing from
+ * an email address, and "signed up under a different address" was the normal case
+ * rather than the exception. A bulk import mints a token per household, the campaign
+ * email carries that token, and a household who signs up through it is matched with
+ * certainty regardless of which address they use. Attribution stops being inference.
  *
- * No producer today. There is no join anywhere in the estate between an invited email
- * and a Lumo account, and the only installer-to-household link that exists at all is
- * `partnerTag` — a free-text `?partner=` URL parameter that a customer can set for
- * themselves. See `producerGaps.ts`.
+ * That leaves a genuine residue, and it is worth keeping honest about it:
  *
- * The track has four entry points rather than one: matching happens once, at the
- * moment the household signs up, so a record arrives already in its answer.
+ *   - The household ignores the email and signs up months later through a Lumo ad.
+ *     Nothing connects them. This is `unmatched_different_email` and it is the state
+ *     that silently eats a £50 — the household is on Lumo and earning, the installer
+ *     did the work, and the row looks like a lead that never converted.
+ *   - Two rows on the installer's list are the same household, or two installers both
+ *     claim one. This is `ambiguous`, and Lumo resolves it rather than guessing,
+ *     because crediting the wrong firm is worse than a short delay.
+ *
+ * No producer today. There is no join anywhere in the estate between a contacted
+ * household and a Lumo account, and the only installer-to-household link that exists
+ * at all is `partnerTag` — a free-text `?partner=` URL parameter the customer can set
+ * for themselves. See `producerGaps.ts`.
  */
 
 export const MATCH_STATE_IDS = [
-  'matched_email',
-  'matched_link',
+  'matched_import',
+  'matched_manual',
   'unmatched_different_email',
   'ambiguous',
 ] as const;
@@ -28,17 +37,17 @@ export const MATCH_STATE_IDS = [
 export type MatchStateId = (typeof MATCH_STATE_IDS)[number];
 
 const STATES: Record<MatchStateId, StateDefinition<MatchStateId>> = {
-  matched_email: {
-    id: 'matched_email',
-    label: 'Matched on email',
+  matched_import: {
+    id: 'matched_import',
+    label: 'Tied to you',
     blocker: null,
     owner: 'nobody',
     action: null,
     disposition: 'earning',
   },
-  matched_link: {
-    id: 'matched_link',
-    label: 'Matched via your link',
+  matched_manual: {
+    id: 'matched_manual',
+    label: 'Tied to you by hand',
     blocker: null,
     owner: 'nobody',
     action: null,
@@ -46,38 +55,39 @@ const STATES: Record<MatchStateId, StateDefinition<MatchStateId>> = {
   },
   unmatched_different_email: {
     id: 'unmatched_different_email',
-    label: 'Signed up with a different email',
+    label: 'On Lumo, not credited to you',
     blocker:
-      "They are on Lumo, but under an address you didn't give us, so nothing ties them to you. Your £50 is not counted while this is open.",
+      "They are on Lumo and running, but they came in on their own rather than through your campaign, so nothing ties them to you. Your £50 is not counted while this is open.",
     owner: 'installer',
     action:
-      "Tell Lumo the address they actually used and we will tie it to you. Don't re-add them — that just creates a duplicate.",
+      'Confirm this is your customer and we will tie it to you. Do not re-add them — that just creates a duplicate and delays it further.',
     disposition: 'blocked',
   },
   ambiguous: {
     id: 'ambiguous',
     label: 'More than one possible match',
     blocker:
-      "More than one Lumo account could be this household, and we won't guess and risk crediting the wrong installer.",
+      "More than one Lumo account could be this household, and we will not guess and risk crediting the wrong firm.",
     owner: 'lumo',
-    action: 'Lumo will confirm which account is theirs. We may ask you for a postcode.',
+    action: 'Lumo will confirm which account is theirs. We may come back to you for a postcode.',
     disposition: 'blocked',
   },
 };
 
 const TRANSITIONS: Record<MatchStateId, readonly MatchStateId[]> = {
-  matched_email: [],
-  matched_link: [],
-  unmatched_different_email: ['matched_email', 'matched_link'],
-  ambiguous: ['matched_email', 'matched_link', 'unmatched_different_email'],
+  matched_import: [],
+  matched_manual: [],
+  unmatched_different_email: ['matched_manual'],
+  ambiguous: ['matched_import', 'matched_manual', 'unmatched_different_email'],
 };
 
 export const MATCH: StateTrack<MatchStateId> = {
   name: 'Match',
   description:
-    'Whether the household who signed up can be tied to the installer who added them. No producer today.',
+    'Whether the household who signed up can be tied to the firm who installed their battery. No producer today.',
   states: STATES,
   order: MATCH_STATE_IDS,
+  // Matching happens once, at signup, so a record arrives already in its answer.
   initial: MATCH_STATE_IDS,
   transitions: TRANSITIONS,
 };

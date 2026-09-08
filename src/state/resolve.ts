@@ -1,7 +1,7 @@
 import type { ActivationStateId } from './activation';
 import { ACTIVATION } from './activation';
-import type { InviteStateId } from './invite';
-import { INVITE } from './invite';
+import type { ContactStateId } from './contact';
+import { CONTACT } from './contact';
 import type { MatchStateId } from './match';
 import { MATCH } from './match';
 import type { EarningsStateId, QualificationInput } from './earnings';
@@ -16,14 +16,14 @@ import { ageBand, fullDaysBetween } from './age';
  * A household sits in a state on every track simultaneously, and the UI has to make
  * the combination legible. Showing four badges per row does not do that — it moves
  * the work onto the installer. So one state is nominated as the thing standing in
- * their way, and the detail sheet shows all four.
+ * their way, and the detail view shows all four.
  *
  * This is a product decision, not a rendering detail, which is why it lives with the
  * state model rather than in a component.
  */
 
 export interface TrackPosition {
-  readonly invite: InviteStateId;
+  readonly contact: ContactStateId;
   readonly activation: ActivationStateId;
   /**
    * `null` until the household has an account. There is nothing to match before
@@ -35,16 +35,16 @@ export interface TrackPosition {
   /**
    * ISO date each track's current state was entered. The age shown on a row is the
    * age of the *nominated* blocker, not of the record, because those differ and only
-   * one of them tells the installer anything. A household invited six weeks ago whose
+   * one of them tells the installer anything. A household emailed six weeks ago whose
    * battery went offline yesterday has a one-day-old problem.
    */
-  readonly inviteSince: string;
+  readonly contactSince: string;
   readonly activationSince: string;
   /** `null` when there is no match state yet. */
   readonly matchSince: string | null;
 }
 
-export type BlockerTrack = 'invite' | 'activation' | 'match' | 'none';
+export type BlockerTrack = 'contact' | 'activation' | 'match' | 'none';
 
 export interface ResolvedState {
   /** Which track the nominated blocker came from. */
@@ -66,7 +66,7 @@ export interface ResolvedState {
 }
 
 export function resolveCustomerState(position: TrackPosition, asOf: string): ResolvedState {
-  const { invite, activation, match, qualification } = position;
+  const { contact, activation, match, qualification } = position;
 
   const qualified = deriveEarningsState(qualification, asOf);
   const money = {
@@ -75,7 +75,7 @@ export function resolveCustomerState(position: TrackPosition, asOf: string): Res
     confirmedButControlDropped: qualified.confirmedButControlDropped,
   };
 
-  const inviteDef = INVITE.states[invite];
+  const contactDef = CONTACT.states[contact];
   const activationDef = ACTIVATION.states[activation];
   const matchDef = match === null ? null : MATCH.states[match];
 
@@ -85,9 +85,9 @@ export function resolveCustomerState(position: TrackPosition, asOf: string): Res
   };
 
   // 1. A blocked match outranks everything. The household is on the platform and may
-  //    be earning perfectly well, while the installer who put them there is credited
-  //    with nothing. Left alone it never resolves: the row sits there looking like a
-  //    lead that never converted, which is exactly how the £50 goes missing.
+  //    be earning perfectly well, while the firm who put them there is credited with
+  //    nothing. Left alone it never resolves: the row sits there looking like a lead
+  //    that never converted, which is exactly how the £50 goes missing.
   if (matchDef && matchDef.disposition === 'blocked') {
     return {
       track: 'match',
@@ -99,23 +99,25 @@ export function resolveCustomerState(position: TrackPosition, asOf: string): Res
     };
   }
 
-  // 2. Before there is an account the invite is the whole story, and it decides
+  // 2. Before there is an account the campaign is the whole story, and it decides
   //    outright. All the platform can say here is "no account", which is true and
-  //    useless: queued-for-Lumo-to-send and bounced-three-weeks-ago are the same
+  //    useless: held-for-a-missing-address and bounced-three-weeks-ago are the same
   //    activation state and completely different situations.
   //
-  //    Deferring to the activation state instead would put every freshly added
-  //    household straight into the installer's own queue telling them to chase an
-  //    invite that has not been sent yet. Waiting a few days after a send is not a
-  //    task, and a queue that says it is gets ignored.
+  //    Deferring to the activation state instead would put every freshly imported
+  //    household into the installer's own queue telling them to chase an email that
+  //    has not been sent yet. Waiting a few days after a send is not a task, and a
+  //    queue that says it is gets ignored.
   if (activation === 'no_account') {
     return {
-      track: 'invite',
-      state: inviteDef,
-      owner: inviteDef.owner,
-      ...aged(position.inviteSince),
+      track: 'contact',
+      state: contactDef,
+      owner: contactDef.owner,
+      ...aged(position.contactSince),
       ...money,
-      needsAttention: inviteDef.disposition === 'blocked' && inviteDef.owner !== 'nobody',
+      // `unsubscribed` and `complained` are blocked but owned by nobody: terminal
+      // facts, not work. They must never enter the queue.
+      needsAttention: contactDef.disposition === 'blocked' && contactDef.owner !== 'nobody',
     };
   }
 

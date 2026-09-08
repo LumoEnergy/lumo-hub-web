@@ -1,5 +1,5 @@
-import type { ActivationStateId, InviteStateId, MatchStateId } from '../state';
-import type { HubCustomer } from './model';
+import type { ActivationStateId, ContactStateId, MatchStateId } from '../state';
+import type { HubCustomer, HubSeat, SenderConfig } from './model';
 
 /**
  * The three personas.
@@ -9,35 +9,75 @@ import type { HubCustomer } from './model';
  * produce the good story — but a happy-path-only model cannot produce credible
  * research. So the model is complete and the persona chooses what you see.
  *
+ * THE PERSONAS ARE CAMPAIGN STAGES, NOT PORTFOLIO SIZES. An earlier set assumed a
+ * firm growing a list by adding households one at a time, which is not the job:
+ * survival depends on getting the EXISTING back-book connected, and installation
+ * lead times are too long for new fits to matter inside the runway. So each persona
+ * is a point in the life of one handed-over customer list.
+ *
  * DATES ARE STORED AS DAY OFFSETS, NOT AS DATES. A hardcoded date would mean a
  * blocker designed to read "3 days old" quietly becomes "3 weeks old" next month and
  * the messy persona stops testing what it was built to test. Offsets are materialised
  * against today at load.
+ *
+ * ROW COUNTS ARE REALISTIC ON PURPOSE. A back-book campaign is mostly silence: the
+ * large majority of any list never responds, and a demo that hides that would set an
+ * expectation the real product cannot meet. The bulk states are generated from a name
+ * pool; every state that needs specific copy is written by hand.
  */
 
-export type PersonaId = 'established' | 'first-run' | 'messy';
+export type PersonaId = 'mid-campaign' | 'awaiting-approval' | 'messy-list';
 
-export const PERSONA_IDS: readonly PersonaId[] = ['established', 'first-run', 'messy'];
+export const PERSONA_IDS: readonly PersonaId[] = [
+  'mid-campaign',
+  'awaiting-approval',
+  'messy-list',
+];
 
-export const DEFAULT_PERSONA: PersonaId = 'established';
+export const DEFAULT_PERSONA: PersonaId = 'mid-campaign';
+
+interface AttestationSeed {
+  readonly confirmedBy: string;
+  readonly confirmedDaysAgo: number;
+}
+
+interface CampaignEmailSeed {
+  readonly subject: string;
+  readonly preheader: string;
+  readonly body: readonly string[];
+  readonly approvedBy: string | null;
+  readonly approvedDaysAgo: number | null;
+}
+
+interface ImportSeed {
+  readonly id: string;
+  readonly suppliedBy: string;
+  readonly suppliedDaysAgo: number;
+  readonly source: string;
+  readonly rowsSupplied: number;
+  readonly rowsLoaded: number;
+  readonly rowsHeld: number;
+  readonly rowsRejected: number;
+  readonly rejectedReason: string | null;
+}
+
+interface CompanySeed {
+  readonly id: string;
+  readonly name: string;
+  readonly seats: readonly HubSeat[];
+  readonly sender: SenderConfig;
+  readonly attestation: AttestationSeed | null;
+  readonly campaignEmail: CampaignEmailSeed;
+  readonly imports: readonly ImportSeed[];
+  readonly selfServeLinkToken: string;
+}
 
 export interface Persona {
   readonly id: PersonaId;
   readonly name: string;
   /** Who this persona is for, and what it is meant to settle. */
   readonly purpose: string;
-  readonly installer: {
-    readonly firstName: string;
-    readonly lastName: string;
-    readonly company: string;
-    /**
-     * Personal to the individual, never the company domain. The incentive only works
-     * if you can pay the person who did the work, and today's partnerTag records an
-     * email domain, so the same firm appears as several installers and four staff at
-     * one company would share a single link.
-     */
-    readonly linkToken: string;
-  };
+  readonly company: CompanySeed;
   readonly customers: readonly CustomerSeed[];
 }
 
@@ -46,11 +86,14 @@ interface CustomerSeed {
   readonly firstName: string;
   readonly lastName: string;
   readonly email: string | null;
-  readonly inverterMake: string;
-  readonly batterySizeKwh: number;
-  readonly addedDaysAgo: number;
-  readonly invite: InviteStateId;
-  readonly inviteSinceDaysAgo: number;
+  readonly postcode: string | null;
+  readonly inverterMake: string | null;
+  readonly batterySizeKwh: number | null;
+  readonly importedDaysAgo: number;
+  readonly importBatchId: string;
+  readonly addedBy: string;
+  readonly contact: ContactStateId;
+  readonly contactSinceDaysAgo: number;
   readonly activation: ActivationStateId;
   readonly activationSinceDaysAgo: number;
   readonly match: MatchStateId | null;
@@ -72,635 +115,597 @@ const INVERTERS = [
   'Huawei',
 ] as const;
 
-/** An earning, long-standing, already-paid household. The bulk of a healthy list. */
-const earningAndPaid = (
-  id: string,
-  firstName: string,
-  lastName: string,
-  inverterIndex: number,
-  batterySizeKwh: number,
-  activeDaysAgo: number,
-  invite: InviteStateId = 'sent_by_lumo',
-  match: MatchStateId = 'matched_email',
-): CustomerSeed => ({
-  id,
-  firstName,
-  lastName,
-  email: `${firstName}.${lastName}@example.com`.toLowerCase(),
-  inverterMake: INVERTERS[inverterIndex % INVERTERS.length],
-  batterySizeKwh,
-  addedDaysAgo: activeDaysAgo + 12,
-  invite,
-  inviteSinceDaysAgo: activeDaysAgo + 10,
-  activation: 'Smart Control Active',
-  activationSinceDaysAgo: activeDaysAgo,
-  match,
-  matchSinceDaysAgo: activeDaysAgo + 4,
-  everActive: true,
-  controlActiveSinceDaysAgo: activeDaysAgo,
-  qualifiedDaysAgo: activeDaysAgo - 30,
-  paidDaysAgo: Math.max(1, activeDaysAgo - 45),
+const BATTERY_SIZES = [5.2, 8.2, 9.5, 10.4, 13.5, 16.0, 20.8] as const;
+
+const FIRST_NAMES = [
+  'Marion', 'Devin', 'Saoirse', 'Ranjit', 'Elspeth', 'Callum', 'Yolanda', 'Fergus',
+  'Imogen', 'Rowan', 'Malcolm', 'Verity', 'Otis', 'Delphine', 'Cordelia', 'Hamish',
+  'Millie', 'Lorenzo', 'Jasper', 'Priya', 'Nadia', 'Orla', 'Bea', 'Tomas',
+  'Dermot', 'Ffion', 'Gareth', 'Harriet', 'Idris', 'Juno', 'Keir', 'Lena',
+  'Moira', 'Niall', 'Ottoline', 'Piers', 'Quentin', 'Rhona', 'Sorcha', 'Torin',
+  'Ualtar', 'Vita', 'Wilf', 'Xanthe', 'Yusuf', 'Zara', 'Aneurin', 'Bronwen',
+  'Cormac', 'Dilys', 'Eamon', 'Freya', 'Gwilym', 'Hestia', 'Isolde', 'Jonty',
+  'Kester', 'Lowri', 'Meredith', 'Nesta',
+] as const;
+
+const LAST_NAMES = [
+  'Ashworth', 'Blackwood', 'Cavendish', 'Dunlop', 'Fairbanks', 'Galbraith',
+  'Ingham', 'Jardine', 'Kettering', 'Langford', 'Northcote', 'Ormerod',
+  'Pemberton', 'Ravenscroft', 'Zielinski', 'Yardley', 'Delacroix', 'Chatterjee',
+  'Ellsworth', 'Whittaker', 'Osei', 'Byrne', 'Whitlock', 'Lindqvist',
+  'Kelly', 'Prydderch', 'Meredith', 'Sandringham', 'Okonjo', 'Fitzwilliam',
+  'Balfour', 'Thorne', 'Vasquez', 'Underhill', 'Rosenthal', 'Quainton',
+  'Pargeter', 'Oyelaran', 'Nightingale', 'Mostyn', 'Larkham', 'Kirkbride',
+  'Jephcott', 'Ivorson', 'Hollingworth', 'Grimsdale', 'Fotheringay', 'Enderby',
+  'Dalgleish', 'Crowhurst', 'Bramwell', 'Aldridge', 'Wetherby', 'Vane',
+  'Trenholme', 'Studholme', 'Rackham', 'Pilkington', 'Ombler', 'Naismith',
+] as const;
+
+const POSTCODE_AREAS = ['LS', 'BD', 'HX', 'WF', 'HD', 'YO', 'S', 'DN'] as const;
+
+/** Deterministic, so a demo looks the same every time it is opened. */
+const nameAt = (i: number) => ({
+  firstName: FIRST_NAMES[i % FIRST_NAMES.length],
+  lastName: LAST_NAMES[(i * 7 + 3) % LAST_NAMES.length],
 });
 
-/**
- * ESTABLISHED — the investor and internal demo.
- *
- * A 27-household portfolio: 16 earning with the money banked or confirmed, two
- * mid-clock, and a small tail of problems. Three of those are the installer's own,
- * which is what a healthy list looks like — most of what goes wrong is somebody
- * else's job, and the design has to say so rather than dumping it all on them.
- */
-const ESTABLISHED_CUSTOMERS: readonly CustomerSeed[] = [
-  earningAndPaid('est-01', 'Marion', 'Ashworth', 0, 9.5, 214),
-  earningAndPaid('est-02', 'Devin', 'Blackwood', 1, 13.5, 198),
-  earningAndPaid('est-03', 'Saoirse', 'Cavendish', 2, 10.4, 187, 'sent_by_installer'),
-  earningAndPaid('est-04', 'Ranjit', 'Dunlop', 3, 13.5, 176),
-  earningAndPaid('est-05', 'Elspeth', 'Fairbanks', 4, 5.2, 165, 'sent_by_lumo', 'matched_link'),
-  earningAndPaid('est-06', 'Callum', 'Galbraith', 5, 9.5, 152),
-  earningAndPaid('est-07', 'Yolanda', 'Ingham', 6, 16.0, 141, 'sent_by_installer'),
-  earningAndPaid('est-08', 'Fergus', 'Jardine', 7, 10.4, 133),
-  earningAndPaid('est-09', 'Imogen', 'Kettering', 0, 8.2, 121),
-  earningAndPaid('est-10', 'Rowan', 'Langford', 1, 13.5, 110, 'sent_by_lumo', 'matched_link'),
-  earningAndPaid('est-11', 'Malcolm', 'Northcote', 2, 20.8, 98),
+const postcodeAt = (i: number) =>
+  `${POSTCODE_AREAS[i % POSTCODE_AREAS.length]}${(i % 27) + 1} ${(i % 9) + 1}${
+    'ABDEFGHJLNPQRSTUWXYZ'[i % 20]
+  }${'ABDEFGHJLNPQRSTUWXYZ'[(i * 3) % 20]}`;
 
-  // Confirmed, awaiting the monthly pay run.
-  {
-    id: 'est-12',
-    firstName: 'Verity',
-    lastName: 'Ormerod',
-    email: 'verity.ormerod@example.com',
-    inverterMake: 'GivEnergy',
-    batterySizeKwh: 9.5,
-    addedDaysAgo: 58,
-    invite: 'sent_by_lumo',
-    inviteSinceDaysAgo: 56,
-    activation: 'Smart Control Active',
-    activationSinceDaysAgo: 44,
-    match: 'matched_email',
-    matchSinceDaysAgo: 50,
-    everActive: true,
-    controlActiveSinceDaysAgo: 44,
-    qualifiedDaysAgo: 14,
-    paidDaysAgo: null,
-  },
-  {
-    id: 'est-13',
-    firstName: 'Otis',
-    lastName: 'Pemberton',
-    email: 'otis.pemberton@example.com',
-    inverterMake: 'Fox ESS',
-    batterySizeKwh: 10.4,
-    addedDaysAgo: 51,
-    invite: 'sent_by_installer',
-    inviteSinceDaysAgo: 50,
-    activation: 'Smart Control Active',
-    activationSinceDaysAgo: 39,
-    match: 'matched_link',
-    matchSinceDaysAgo: 45,
-    everActive: true,
-    controlActiveSinceDaysAgo: 39,
-    qualifiedDaysAgo: 9,
-    paidDaysAgo: null,
-  },
-  {
-    id: 'est-14',
-    firstName: 'Delphine',
-    lastName: 'Ravenscroft',
-    email: 'delphine.ravenscroft@example.com',
-    inverterMake: 'Tesla',
-    batterySizeKwh: 13.5,
-    addedDaysAgo: 46,
-    invite: 'sent_by_lumo',
-    inviteSinceDaysAgo: 44,
-    activation: 'Smart Control Active',
-    activationSinceDaysAgo: 33,
-    match: 'matched_email',
-    matchSinceDaysAgo: 40,
-    everActive: true,
-    controlActiveSinceDaysAgo: 33,
-    qualifiedDaysAgo: 3,
-    paidDaysAgo: null,
-  },
-
-  // Mid-clock.
-  {
-    id: 'est-15',
-    firstName: 'Barnaby',
-    lastName: 'Sinclair',
-    email: 'barnaby.sinclair@example.com',
-    inverterMake: 'Sungrow',
-    batterySizeKwh: 8.2,
-    addedDaysAgo: 34,
-    invite: 'sent_by_lumo',
-    inviteSinceDaysAgo: 33,
-    activation: 'Smart Control Active',
-    activationSinceDaysAgo: 21,
-    match: 'matched_email',
-    matchSinceDaysAgo: 28,
-    everActive: true,
-    controlActiveSinceDaysAgo: 21,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-  {
-    id: 'est-16',
-    firstName: 'Talia',
-    lastName: 'Trelawney',
-    email: 'talia.trelawney@example.com',
-    inverterMake: 'SolaX',
-    batterySizeKwh: 5.2,
-    addedDaysAgo: 19,
-    invite: 'sent_by_installer',
-    inviteSinceDaysAgo: 18,
-    activation: 'Smart Control Active',
-    activationSinceDaysAgo: 6,
-    match: 'matched_link',
-    matchSinceDaysAgo: 13,
-    everActive: true,
-    controlActiveSinceDaysAgo: 6,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-
-  // In flight — Lumo is testing control. Nothing to chase, and the list must not
-  // present it as though there were.
-  {
-    id: 'est-17',
-    firstName: 'Niall',
-    lastName: 'Underhill',
-    email: 'niall.underhill@example.com',
-    inverterMake: 'Growatt',
-    batterySizeKwh: 9.5,
-    addedDaysAgo: 11,
-    invite: 'sent_by_lumo',
-    inviteSinceDaysAgo: 10,
-    activation: 'Smart Control Test Running',
-    activationSinceDaysAgo: 1,
-    match: 'matched_email',
-    matchSinceDaysAgo: 5,
-    everActive: false,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-
-  // Earning, but Lumo cannot safely say which account is theirs.
-  {
-    id: 'est-18',
-    firstName: 'Priya',
-    lastName: 'Whittaker',
-    email: 'p.whittaker@example.com',
-    inverterMake: 'GivEnergy',
-    batterySizeKwh: 10.4,
-    addedDaysAgo: 63,
-    invite: 'sent_by_lumo',
-    inviteSinceDaysAgo: 61,
-    activation: 'Smart Control Active',
-    activationSinceDaysAgo: 49,
-    match: 'ambiguous',
-    matchSinceDaysAgo: 55,
-    everActive: true,
-    controlActiveSinceDaysAgo: 49,
-    qualifiedDaysAgo: 19,
-    paidDaysAgo: null,
-  },
-
-  // Household turned it off at day 22. The clock is back to zero, and the earnings
-  // screen has to be honest about that.
-  {
-    id: 'est-19',
-    firstName: 'Hamish',
-    lastName: 'Yardley',
-    email: 'hamish.yardley@example.com',
-    inverterMake: 'SolarEdge',
-    batterySizeKwh: 13.5,
-    addedDaysAgo: 71,
-    invite: 'sent_by_lumo',
-    inviteSinceDaysAgo: 69,
-    activation: 'Smart Control Inactive',
-    activationSinceDaysAgo: 26,
-    match: 'matched_email',
-    matchSinceDaysAgo: 63,
-    everActive: true,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-  {
-    id: 'est-20',
-    firstName: 'Cordelia',
-    lastName: 'Zielinski',
-    email: 'cordelia.zielinski@example.com',
-    inverterMake: 'Huawei',
-    batterySizeKwh: 8.2,
-    addedDaysAgo: 88,
-    invite: 'sent_by_installer',
-    inviteSinceDaysAgo: 86,
-    activation: 'Needs Relink',
-    activationSinceDaysAgo: 9,
-    match: 'matched_email',
-    matchSinceDaysAgo: 80,
-    everActive: true,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: 41,
-    paidDaysAgo: null,
-  },
-
-  // Lumo's problems. Both must read as Lumo's, or installers waste calls on them.
-  {
-    id: 'est-21',
-    firstName: 'Wesley',
-    lastName: 'Abernathy',
-    email: 'wesley.abernathy@example.com',
-    inverterMake: 'Growatt',
-    batterySizeKwh: 5.0,
-    addedDaysAgo: 40,
-    invite: 'sent_by_lumo',
-    inviteSinceDaysAgo: 38,
-    activation: 'Smart Control Test Failed',
-    activationSinceDaysAgo: 24,
-    match: 'matched_email',
-    matchSinceDaysAgo: 32,
-    everActive: false,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-  {
-    id: 'est-22',
-    firstName: 'Georgia',
-    lastName: 'Broadbent',
-    email: 'georgia.broadbent@example.com',
-    inverterMake: 'SolaX',
-    batterySizeKwh: 9.5,
-    addedDaysAgo: 30,
-    invite: 'sent_by_lumo',
-    inviteSinceDaysAgo: 28,
-    activation: 'Smart Control Check Incomplete',
-    activationSinceDaysAgo: 8,
-    match: 'matched_email',
-    matchSinceDaysAgo: 21,
-    everActive: false,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-
-  // The installer's own three.
-  {
-    id: 'est-23',
-    firstName: 'Lorenzo',
-    lastName: 'Chatterjee',
-    email: 'lorenzo.chatterjee@example.com',
-    inverterMake: 'Fox ESS',
-    batterySizeKwh: 10.4,
-    addedDaysAgo: 96,
-    invite: 'sent_by_lumo',
-    inviteSinceDaysAgo: 94,
-    activation: 'Device Disconnected',
-    activationSinceDaysAgo: 4,
-    match: 'matched_email',
-    matchSinceDaysAgo: 88,
-    everActive: true,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: 52,
-    paidDaysAgo: 22,
-  },
-  // The misspelled domain is deliberate: this is why the invite bounced, and the
-  // recommended action ("check the address and re-add with the correction") only
-  // makes sense if the data shows a plausible reason.
-  {
-    id: 'est-24',
-    firstName: 'Millie',
-    lastName: 'Delacroix',
-    email: 'millie.delacroix@exmaple.com',
-    inverterMake: 'GivEnergy',
-    batterySizeKwh: 5.2,
-    addedDaysAgo: 25,
-    invite: 'bounced',
-    inviteSinceDaysAgo: 24,
-    activation: 'no_account',
-    activationSinceDaysAgo: 25,
-    match: null,
-    matchSinceDaysAgo: null,
-    everActive: false,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-  {
-    id: 'est-25',
-    firstName: 'Jasper',
-    lastName: 'Ellsworth',
-    email: 'jasper.ellsworth@example.com',
-    inverterMake: 'Tesla',
-    batterySizeKwh: 13.5,
-    addedDaysAgo: 3,
-    invite: 'added',
-    inviteSinceDaysAgo: 3,
-    activation: 'no_account',
-    activationSinceDaysAgo: 3,
-    match: null,
-    matchSinceDaysAgo: null,
-    everActive: false,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-
-  // Queued for Lumo to send. In flight, not a task.
-  {
-    id: 'est-26',
-    firstName: 'Anya',
-    lastName: 'Fitzgerald',
-    email: 'anya.fitzgerald@example.com',
-    inverterMake: 'Sungrow',
-    batterySizeKwh: 9.5,
-    addedDaysAgo: 1,
-    invite: 'staged_for_lumo',
-    inviteSinceDaysAgo: 1,
-    activation: 'no_account',
-    activationSinceDaysAgo: 1,
-    match: null,
-    matchSinceDaysAgo: null,
-    everActive: false,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-
-  // Opted out. Closed, and correctly absent from the queue.
-  {
-    id: 'est-27',
-    firstName: 'Dexter',
-    lastName: 'Holloway',
-    email: 'dexter.holloway@example.com',
-    inverterMake: 'SolarEdge',
-    batterySizeKwh: 8.2,
-    addedDaysAgo: 77,
-    invite: 'unsubscribed',
-    inviteSinceDaysAgo: 70,
-    activation: 'no_account',
-    activationSinceDaysAgo: 77,
-    match: null,
-    matchSinceDaysAgo: null,
-    everActive: false,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-];
+const emailFor = (firstName: string, lastName: string) =>
+  `${firstName}.${lastName}@example.com`.toLowerCase();
 
 /**
- * MESSY — the research conversation.
- *
- * Eight invited. One confirmed £50, one earning household whose £50 is being eaten
- * because they signed up with a different address, one mid-clock, and five stuck at
- * different stages with different owners. The ages are deliberately spread across
- * every band, including one dead lead, so an installer has to distinguish "chase
- * today" from "this is gone".
+ * Base seed. Every archetype below is this with a few fields replaced, which keeps
+ * the difference between two states visible instead of buried in duplication.
  */
-const MESSY_CUSTOMERS: readonly CustomerSeed[] = [
-  // The one that worked.
-  {
-    id: 'msy-01',
-    firstName: 'Priya',
-    lastName: 'Raval',
-    email: 'priya.raval@example.com',
-    inverterMake: 'GivEnergy',
-    batterySizeKwh: 9.5,
-    addedDaysAgo: 82,
-    invite: 'sent_by_lumo',
-    inviteSinceDaysAgo: 80,
-    activation: 'Smart Control Active',
-    activationSinceDaysAgo: 68,
-    match: 'matched_email',
-    matchSinceDaysAgo: 74,
-    everActive: true,
-    controlActiveSinceDaysAgo: 68,
-    qualifiedDaysAgo: 38,
-    paidDaysAgo: null,
-  },
-
-  // The one that quietly eats the £50: on Lumo, earning, credited to nobody.
-  {
-    id: 'msy-02',
-    firstName: 'Dermot',
-    lastName: 'Kelly',
-    email: 'dermot.kelly@example.com',
-    inverterMake: 'Fox ESS',
-    batterySizeKwh: 13.5,
-    addedDaysAgo: 57,
-    invite: 'sent_by_installer',
-    inviteSinceDaysAgo: 56,
-    activation: 'Smart Control Active',
-    activationSinceDaysAgo: 45,
-    match: 'unmatched_different_email',
-    matchSinceDaysAgo: 50,
-    everActive: true,
-    controlActiveSinceDaysAgo: 45,
-    qualifiedDaysAgo: 15,
-    paidDaysAgo: null,
-  },
-
-  // Mid-clock, nothing to do.
-  {
-    id: 'msy-03',
-    firstName: 'Hamish',
-    lastName: 'Doyle',
-    email: 'hamish.doyle@example.com',
-    inverterMake: 'Tesla',
-    batterySizeKwh: 13.5,
-    addedDaysAgo: 31,
-    invite: 'sent_by_installer',
-    inviteSinceDaysAgo: 30,
-    activation: 'Smart Control Active',
-    activationSinceDaysAgo: 18,
-    match: 'matched_link',
-    matchSinceDaysAgo: 24,
-    everActive: true,
-    controlActiveSinceDaysAgo: 18,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-
-  // Dead lead. Invited seven weeks ago, never signed up. Must not look like the
-  // three-day-old problems.
-  {
-    id: 'msy-04',
-    firstName: 'Nadia',
-    lastName: 'Osei',
-    email: 'nadia.osei@example.com',
-    inverterMake: 'SolarEdge',
-    batterySizeKwh: 10.4,
-    addedDaysAgo: 49,
-    invite: 'no_response',
-    inviteSinceDaysAgo: 47,
+const base = (i: number, batchId: string, addedBy: string): CustomerSeed => {
+  const { firstName, lastName } = nameAt(i);
+  return {
+    id: `${batchId}-${String(i).padStart(3, '0')}`,
+    firstName,
+    lastName,
+    email: emailFor(firstName, lastName),
+    postcode: postcodeAt(i),
+    inverterMake: INVERTERS[i % INVERTERS.length],
+    batterySizeKwh: BATTERY_SIZES[i % BATTERY_SIZES.length],
+    importedDaysAgo: 38,
+    importBatchId: batchId,
+    addedBy,
+    contact: 'sent',
+    contactSinceDaysAgo: 30,
     activation: 'no_account',
-    activationSinceDaysAgo: 49,
+    activationSinceDaysAgo: 30,
     match: null,
     matchSinceDaysAgo: null,
     everActive: false,
     controlActiveSinceDaysAgo: null,
     qualifiedDaysAgo: null,
     paidDaysAgo: null,
-  },
-
-  // Signed up, never connected the inverter. The step people stall on.
-  {
-    id: 'msy-05',
-    firstName: 'Callum',
-    lastName: 'Frazier',
-    email: 'callum.frazier@example.com',
-    inverterMake: 'Sungrow',
-    batterySizeKwh: 8.2,
-    addedDaysAgo: 27,
-    invite: 'sent_by_lumo',
-    inviteSinceDaysAgo: 26,
-    activation: 'Not Linked',
-    activationSinceDaysAgo: 23,
-    match: 'matched_email',
-    matchSinceDaysAgo: 23,
-    everActive: false,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-
-  // Connected, no tariff.
-  {
-    id: 'msy-06',
-    firstName: 'Bea',
-    lastName: 'Whitlock',
-    email: 'bea.whitlock@example.com',
-    inverterMake: 'SolaX',
-    batterySizeKwh: 5.2,
-    addedDaysAgo: 16,
-    invite: 'sent_by_lumo',
-    inviteSinceDaysAgo: 15,
-    activation: 'Linked, No Tariff',
-    activationSinceDaysAgo: 11,
-    match: 'matched_email',
-    matchSinceDaysAgo: 12,
-    everActive: false,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-
-  // One toggle from earning.
-  {
-    id: 'msy-07',
-    firstName: 'Tomas',
-    lastName: 'Lindqvist',
-    email: 'tomas.lindqvist@example.com',
-    inverterMake: 'Huawei',
-    batterySizeKwh: 16.0,
-    addedDaysAgo: 12,
-    invite: 'sent_by_installer',
-    inviteSinceDaysAgo: 12,
-    activation: 'Setup Incomplete',
-    activationSinceDaysAgo: 7,
-    match: 'matched_email',
-    matchSinceDaysAgo: 8,
-    everActive: false,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-
-  // Shared by QR, so no email was ever captured — and now the battery is offline,
-  // which is the one problem on the list the installer can actually fix.
-  {
-    id: 'msy-08',
-    firstName: 'Orla',
-    lastName: 'Byrne',
-    email: null,
-    inverterMake: 'Growatt',
-    batterySizeKwh: 9.5,
-    addedDaysAgo: 38,
-    invite: 'link_only',
-    inviteSinceDaysAgo: 38,
-    activation: 'Device Disconnected',
-    activationSinceDaysAgo: 2,
-    match: 'matched_link',
-    matchSinceDaysAgo: 33,
-    everActive: true,
-    controlActiveSinceDaysAgo: null,
-    qualifiedDaysAgo: null,
-    paidDaysAgo: null,
-  },
-];
-
-export const PERSONAS: Readonly<Record<PersonaId, Persona>> = {
-  established: {
-    id: 'established',
-    name: 'Established',
-    purpose:
-      'The investor and internal demo. A 27-household portfolio, most of it earning, with a realistic tail of problems — three of them the installer’s own and the rest somebody else’s.',
-    installer: {
-      firstName: 'Ade',
-      lastName: 'Bankole',
-      company: 'Northfield Renewables',
-      linkToken: 'ade-b-4k2f',
-    },
-    customers: ESTABLISHED_CUSTOMERS,
-  },
-  'first-run': {
-    id: 'first-run',
-    name: 'First run',
-    purpose:
-      'Zero customers, nothing yet. Tests whether the empty product still explains itself — and whether the offer is legible before any money exists.',
-    installer: {
-      firstName: 'Sam',
-      lastName: 'Okonjo',
-      company: 'Bramble Energy Services',
-      linkToken: 'sam-o-9x7d',
-    },
-    customers: [],
-  },
-  messy: {
-    id: 'messy',
-    name: 'Messy',
-    purpose:
-      'The research conversation. Eight invited, five stuck at different stages with different owners, one email that never matched, one confirmed £50.',
-    installer: {
-      firstName: 'Ade',
-      lastName: 'Bankole',
-      company: 'Northfield Renewables',
-      linkToken: 'ade-b-4k2f',
-    },
-    customers: MESSY_CUSTOMERS,
-  },
+  };
 };
 
-const isoDaysAgo = (today: string, daysAgo: number): string =>
-  new Date(Date.parse(`${today}T00:00:00Z`) - daysAgo * 86_400_000).toISOString().slice(0, 10);
+type Archetype = (seed: CustomerSeed, i: number) => CustomerSeed;
 
-/** Turn a persona's day offsets into real dates relative to `today`. */
-export function materialise(persona: Persona, today: string): readonly HubCustomer[] {
-  const on = (daysAgo: number) => isoDaysAgo(today, daysAgo);
-  const onOrNull = (daysAgo: number | null) => (daysAgo === null ? null : on(daysAgo));
+/** Signed up, control running, 30 days served, money already paid out. */
+const earningPaid: Archetype = (s, i) => {
+  const activeDaysAgo = 40 + (i % 90);
+  return {
+    ...s,
+    contact: 'signed_up',
+    contactSinceDaysAgo: activeDaysAgo + 6,
+    activation: 'Smart Control Active',
+    activationSinceDaysAgo: activeDaysAgo,
+    match: 'matched_import',
+    matchSinceDaysAgo: activeDaysAgo + 6,
+    everActive: true,
+    controlActiveSinceDaysAgo: activeDaysAgo,
+    qualifiedDaysAgo: activeDaysAgo - 30,
+    paidDaysAgo: Math.max(1, activeDaysAgo - 38),
+  };
+};
 
-  return persona.customers.map((seed) => ({
-    id: seed.id,
-    firstName: seed.firstName,
-    lastName: seed.lastName,
-    email: seed.email,
-    inverterMake: seed.inverterMake,
-    batterySizeKwh: seed.batterySizeKwh,
-    addedOn: on(seed.addedDaysAgo),
-    invite: seed.invite,
-    inviteSince: on(seed.inviteSinceDaysAgo),
-    activation: seed.activation,
-    activationSince: on(seed.activationSinceDaysAgo),
-    match: seed.match,
-    matchSince: onOrNull(seed.matchSinceDaysAgo),
-    qualification: {
-      everActive: seed.everActive,
-      controlActiveSince: onOrNull(seed.controlActiveSinceDaysAgo),
-      qualifiedAt: onOrNull(seed.qualifiedDaysAgo),
-      paidAt: onOrNull(seed.paidDaysAgo),
+/** Served the 30 days, awaiting the next monthly pay run. */
+const earningConfirmed: Archetype = (s, i) => {
+  const activeDaysAgo = 33 + (i % 5);
+  return {
+    ...s,
+    contact: 'signed_up',
+    contactSinceDaysAgo: activeDaysAgo + 5,
+    activation: 'Smart Control Active',
+    activationSinceDaysAgo: activeDaysAgo,
+    match: 'matched_import',
+    matchSinceDaysAgo: activeDaysAgo + 5,
+    everActive: true,
+    controlActiveSinceDaysAgo: activeDaysAgo,
+    qualifiedDaysAgo: activeDaysAgo - 30,
+    paidDaysAgo: null,
+  };
+};
+
+/** Mid-clock. Nothing to do but wait, which the queue must not present as a task. */
+const qualifying: Archetype = (s, i) => {
+  const activeDaysAgo = 4 + (i % 24);
+  return {
+    ...s,
+    contact: 'signed_up',
+    contactSinceDaysAgo: activeDaysAgo + 3,
+    activation: 'Smart Control Active',
+    activationSinceDaysAgo: activeDaysAgo,
+    match: 'matched_import',
+    matchSinceDaysAgo: activeDaysAgo + 3,
+    everActive: true,
+    controlActiveSinceDaysAgo: activeDaysAgo,
+    qualifiedDaysAgo: null,
+    paidDaysAgo: null,
+  };
+};
+
+/** Signed up but stuck somewhere in setup. The activation track owns the copy. */
+const stuckAt =
+  (activation: ActivationStateId, sinceDaysAgo: number, everActive = false): Archetype =>
+  (s) => ({
+    ...s,
+    contact: 'signed_up',
+    contactSinceDaysAgo: sinceDaysAgo + 4,
+    activation,
+    activationSinceDaysAgo: sinceDaysAgo,
+    match: 'matched_import',
+    matchSinceDaysAgo: sinceDaysAgo + 4,
+    everActive,
+    controlActiveSinceDaysAgo: null,
+    qualifiedDaysAgo: null,
+    paidDaysAgo: null,
+  });
+
+const inContactState =
+  (contact: ContactStateId, sinceDaysAgo: number): Archetype =>
+  (s) => ({ ...s, contact, contactSinceDaysAgo: sinceDaysAgo });
+
+/** Held for a missing address: the list simply had no email for them. */
+const heldNoEmail: Archetype = (s) => ({
+  ...s,
+  email: null,
+  contact: 'held_no_email',
+  contactSinceDaysAgo: 38,
+});
+
+/** Held because the export does not say whether there is a battery at all. */
+const heldUnconfirmed: Archetype = (s) => ({
+  ...s,
+  inverterMake: null,
+  batterySizeKwh: null,
+  contact: 'held_unconfirmed',
+  contactSinceDaysAgo: 38,
+});
+
+const bulk = (
+  archetype: Archetype,
+  count: number,
+  from: number,
+  batchId: string,
+  addedBy: string,
+): CustomerSeed[] =>
+  Array.from({ length: count }, (_, n) => {
+    const i = from + n;
+    return archetype(base(i, batchId, addedBy), i);
+  });
+
+/**
+ * The campaign email itself, and a research artefact in its own right.
+ *
+ * Written to be sent BY the installer, not by Lumo: the firm has the relationship
+ * and the permission, and the reply-to comes back to them. Note what is absent —
+ * there is no savings figure and no annual estimate, because nothing in the estate
+ * can currently substantiate a per-household number and a claim the product cannot
+ * back is how a channel dies. If a defensible figure ever exists, this is the one
+ * place to add it.
+ */
+const CAMPAIGN_EMAIL = {
+  subject: 'Switching your battery over to smart control',
+  preheader: "We've partnered with Lumo to get more out of the battery we fitted for you.",
+  body: [
+    'When we fitted your battery we set it up to store your solar. Since then we have partnered with Lumo, who can control it automatically against your electricity tariff — charging it when power is cheap and using it when it is not.',
+    'There is nothing to install and nothing to pay. It connects to the inverter you already have, and you stay in charge: you can switch it off again whenever you like.',
+    'It takes about five minutes to set up. If you would rather ask us first, just reply to this email and it comes straight back to us.',
+  ],
+} as const;
+
+// -----------------------------------------------------------------------------
+// MID-CAMPAIGN — the investor and internal demo.
+//
+// Northfield Renewables handed over 245 past jobs five weeks ago. 237 loaded, and
+// the campaign has been running for a month. This is what the honest middle of a
+// back-book campaign looks like: mostly silence, a real tail of money, a dozen warm
+// leads worth a phone call, and a handful of rows only the firm can unblock.
+// -----------------------------------------------------------------------------
+
+const NORTHFIELD_SEATS: readonly HubSeat[] = [
+  { id: 'seat-1', name: 'Ade Bankole', role: 'owner', isCurrentUser: true },
+  { id: 'seat-2', name: 'Sean Docherty', role: 'member', isCurrentUser: false },
+  { id: 'seat-3', name: 'Rita Mensah', role: 'member', isCurrentUser: false },
+];
+
+const MID_CAMPAIGN_CUSTOMERS: readonly CustomerSeed[] = [
+  // The money. 14 paid, 6 confirmed and awaiting the pay run, 5 mid-clock.
+  ...bulk(earningPaid, 14, 0, 'imp-1', 'Ade Bankole'),
+  ...bulk(earningConfirmed, 6, 14, 'imp-1', 'Ade Bankole'),
+  ...bulk(qualifying, 5, 20, 'imp-1', 'Sean Docherty'),
+
+  // Signed up and stuck. Every activation state that can block, so the ownership
+  // grouping has something real to sort.
+  stuckAt('Device Disconnected', 4)(base(25, 'imp-1', 'Sean Docherty'), 25),
+  stuckAt('Needs Relink', 11)(base(26, 'imp-1', 'Ade Bankole'), 26),
+  stuckAt('Smart Control Inactive', 22, true)(base(27, 'imp-1', 'Rita Mensah'), 27),
+  stuckAt('Setup Incomplete', 9)(base(28, 'imp-1', 'Rita Mensah'), 28),
+  stuckAt('Linked, No Tariff', 16)(base(29, 'imp-1', 'Ade Bankole'), 29),
+  stuckAt('Not Linked', 6)(base(30, 'imp-1', 'Sean Docherty'), 30),
+  stuckAt('Smart Control Test Running', 2)(base(31, 'imp-1', 'Ade Bankole'), 31),
+  stuckAt('Smart Control Test Failed', 5)(base(32, 'imp-1', 'Rita Mensah'), 32),
+  stuckAt('Smart Control Check Incomplete', 3)(base(33, 'imp-1', 'Ade Bankole'), 33),
+
+  // Earning perfectly well, credited to nobody. The state that eats a £50 silently.
+  {
+    ...earningPaid(base(34, 'imp-1', 'Ade Bankole'), 34),
+    contact: 'signed_up',
+    match: 'unmatched_different_email',
+    matchSinceDaysAgo: 21,
+    paidDaysAgo: null,
+    qualifiedDaysAgo: 12,
+  },
+  {
+    ...qualifying(base(35, 'imp-1', 'Rita Mensah'), 35),
+    match: 'ambiguous',
+    matchSinceDaysAgo: 8,
+  },
+  // Was unmatched, queried, and tied to the firm by hand. Proves the unmatched row
+  // above has an exit rather than being a dead end.
+  {
+    ...earningConfirmed(base(36, 'imp-1', 'Ade Bankole'), 36),
+    match: 'matched_manual',
+    matchSinceDaysAgo: 6,
+  },
+
+  // The warm leads: clicked through and stopped. The firm's actual reason to log in.
+  ...bulk(inContactState('clicked', 9), 12, 37, 'imp-1', 'Sean Docherty'),
+
+  // Opened and went no further.
+  ...bulk(inContactState('opened', 17), 28, 49, 'imp-1', 'Ade Bankole'),
+
+  // Delivered days ago and nothing has happened yet, which is not a problem and must
+  // not be presented as one. These are corrected bounces and released held rows
+  // rejoining the send. A queue that chases a three-day-old email is a queue that
+  // gets ignored.
+  ...bulk(inContactState('sent', 3), 10, 77, 'imp-1', 'Rita Mensah'),
+
+  // The silent majority. A back-book campaign is mostly this, and hiding it would
+  // set an expectation the real product cannot meet.
+  ...bulk(inContactState('no_response', 26), 90, 87, 'imp-1', 'Ade Bankole'),
+
+  // Dead addresses. Routine on a book this old, and each one is a recoverable £50.
+  ...bulk(inContactState('bounced', 24), 18, 177, 'imp-1', 'Sean Docherty'),
+
+  ...bulk(inContactState('unsubscribed', 22), 6, 195, 'imp-1', 'Ade Bankole'),
+  ...bulk(inContactState('complained', 20), 2, 201, 'imp-1', 'Ade Bankole'),
+
+  // Held back. The only work the product asks of them, and where the £50s hide.
+  ...bulk(heldNoEmail, 28, 203, 'imp-1', 'Rita Mensah'),
+  ...bulk(heldUnconfirmed, 6, 231, 'imp-1', 'Rita Mensah'),
+];
+
+const MID_CAMPAIGN: Persona = {
+  id: 'mid-campaign',
+  name: 'Mid-campaign',
+  purpose:
+    'The investor and internal demo. A back-book campaign a month in: money landing, a dozen warm leads worth calling, and a short list only the firm can unblock.',
+  company: {
+    id: 'co-northfield',
+    name: 'Northfield Renewables',
+    seats: NORTHFIELD_SEATS,
+    sender: {
+      rung: 'delegated_subdomain',
+      displayName: 'Northfield Renewables',
+      replyTo: 'hello@northfieldrenewables.co.uk',
+      sendingDomain: 'lumo.northfieldrenewables.co.uk',
+      delegationVerified: true,
     },
-  }));
+    attestation: { confirmedBy: 'Ade Bankole', confirmedDaysAgo: 40 },
+    campaignEmail: {
+      ...CAMPAIGN_EMAIL,
+      approvedBy: 'Ade Bankole',
+      approvedDaysAgo: 37,
+    },
+    imports: [
+      {
+        id: 'imp-1',
+        suppliedBy: 'Ade Bankole',
+        suppliedDaysAgo: 39,
+        source: 'Commusoft export, all jobs tagged battery since 2021',
+        rowsSupplied: 245,
+        rowsLoaded: 237,
+        rowsHeld: 34,
+        rowsRejected: 8,
+        rejectedReason:
+          'Eight rows were exact duplicates of another row in the same file, same name and same address.',
+      },
+    ],
+    selfServeLinkToken: 'northfield',
+  },
+  customers: MID_CAMPAIGN_CUSTOMERS,
+};
+
+// -----------------------------------------------------------------------------
+// AWAITING APPROVAL — the onboarding promise, tested.
+//
+// Kestrel Electrical signed up four days ago and emailed over a spreadsheet. Lumo
+// has loaded and cleaned it. Nothing has been sent, because the one sign-off the
+// product asks for has not happened yet.
+//
+// The question this persona exists to answer: does an installer who has done nothing
+// but hand over a file understand what happens next, and does one approval feel like
+// a fair ask? There is no money on this screen and there must be no forecast of any.
+// -----------------------------------------------------------------------------
+
+const KESTREL_SEATS: readonly HubSeat[] = [
+  { id: 'seat-1', name: 'Joanne Pike', role: 'owner', isCurrentUser: true },
+  { id: 'seat-2', name: 'Dev Raichura', role: 'member', isCurrentUser: false },
+];
+
+const AWAITING_APPROVAL_CUSTOMERS: readonly CustomerSeed[] = [
+  ...bulk(inContactState('awaiting_approval', 2), 118, 0, 'imp-1', 'Joanne Pike'),
+  ...bulk(heldNoEmail, 24, 118, 'imp-1', 'Joanne Pike'),
+  ...bulk(heldUnconfirmed, 10, 142, 'imp-1', 'Joanne Pike'),
+];
+
+const AWAITING_APPROVAL: Persona = {
+  id: 'awaiting-approval',
+  name: 'Awaiting approval',
+  purpose:
+    'The onboarding promise. A firm four days in: list handed over, cleaned by Lumo, nothing sent. Tests whether one approval reads as a fair ask and what the held rows communicate.',
+  company: {
+    id: 'co-kestrel',
+    name: 'Kestrel Electrical',
+    seats: KESTREL_SEATS,
+    sender: {
+      rung: 'lumo_domain',
+      displayName: 'Kestrel Electrical',
+      replyTo: 'jo@kestrel-electrical.co.uk',
+      sendingDomain: 'send.lumopartners.co.uk',
+      delegationVerified: false,
+    },
+    attestation: { confirmedBy: 'Joanne Pike', confirmedDaysAgo: 4 },
+    campaignEmail: {
+      ...CAMPAIGN_EMAIL,
+      approvedBy: null,
+      approvedDaysAgo: null,
+    },
+    imports: [
+      {
+        id: 'imp-1',
+        suppliedBy: 'Joanne Pike',
+        suppliedDaysAgo: 3,
+        source: 'Spreadsheet emailed to Lumo, exported from Xero',
+        rowsSupplied: 160,
+        rowsLoaded: 152,
+        rowsHeld: 34,
+        rowsRejected: 8,
+        rejectedReason:
+          'Eight rows had no name and no address, so there was nothing to identify a household by.',
+      },
+    ],
+    selfServeLinkToken: 'kestrel',
+  },
+  customers: AWAITING_APPROVAL_CUSTOMERS,
+};
+
+// -----------------------------------------------------------------------------
+// MESSY LIST — the research conversation.
+//
+// Fenwick Solar handed over a genuinely bad export: nearly half the rows had no
+// usable email, the addresses are old enough that a lot bounced, and two households
+// reported the email as spam. Two are earning despite all of it.
+//
+// This is the persona for the hard questions. Whose fault is a filthy list, what
+// will a firm actually do about 41 missing addresses, and does a complaint shown
+// honestly cost trust or earn it?
+// -----------------------------------------------------------------------------
+
+const FENWICK_SEATS: readonly HubSeat[] = [
+  { id: 'seat-1', name: 'Gordon Fenwick', role: 'owner', isCurrentUser: true },
+];
+
+const MESSY_CUSTOMERS: readonly CustomerSeed[] = [
+  ...bulk(earningPaid, 1, 0, 'imp-1', 'Gordon Fenwick'),
+  ...bulk(qualifying, 2, 1, 'imp-1', 'Gordon Fenwick'),
+
+  stuckAt('Device Disconnected', 2)(base(3, 'imp-1', 'Gordon Fenwick'), 3),
+  stuckAt('Not Linked', 7)(base(4, 'imp-1', 'Gordon Fenwick'), 4),
+  stuckAt('Linked, No Tariff', 11)(base(5, 'imp-1', 'Gordon Fenwick'), 5),
+  stuckAt('Smart Control Inactive', 24, true)(base(6, 'imp-1', 'Gordon Fenwick'), 6),
+
+  // On Lumo, running, credited to nobody, and stale enough to be embarrassing.
+  {
+    ...earningConfirmed(base(7, 'imp-1', 'Gordon Fenwick'), 7),
+    match: 'unmatched_different_email',
+    matchSinceDaysAgo: 44,
+    paidDaysAgo: null,
+  },
+
+  ...bulk(inContactState('clicked', 12), 3, 8, 'imp-1', 'Gordon Fenwick'),
+  ...bulk(inContactState('opened', 19), 7, 11, 'imp-1', 'Gordon Fenwick'),
+  ...bulk(inContactState('no_response', 28), 22, 18, 'imp-1', 'Gordon Fenwick'),
+
+  // The bounce rate that damages a sending domain, and the two complaints that
+  // prove why the attestation matters.
+  ...bulk(inContactState('bounced', 27), 14, 40, 'imp-1', 'Gordon Fenwick'),
+  ...bulk(inContactState('complained', 26), 2, 54, 'imp-1', 'Gordon Fenwick'),
+  ...bulk(inContactState('unsubscribed', 25), 4, 56, 'imp-1', 'Gordon Fenwick'),
+
+  // Nearly half the list, unusable, and only he can fix it.
+  ...bulk(heldNoEmail, 41, 60, 'imp-1', 'Gordon Fenwick'),
+  ...bulk(heldUnconfirmed, 9, 101, 'imp-1', 'Gordon Fenwick'),
+];
+
+const MESSY_LIST: Persona = {
+  id: 'messy-list',
+  name: 'Messy list',
+  purpose:
+    'The research conversation. A filthy export: nearly half the rows unusable, a bounce rate that hurts deliverability, two spam complaints, and two households earning anyway.',
+  company: {
+    id: 'co-fenwick',
+    name: 'Fenwick Solar',
+    seats: FENWICK_SEATS,
+    sender: {
+      rung: 'lumo_domain',
+      displayName: 'Fenwick Solar',
+      replyTo: 'gordon@fenwicksolar.co.uk',
+      sendingDomain: 'send.lumopartners.co.uk',
+      delegationVerified: false,
+    },
+    attestation: { confirmedBy: 'Gordon Fenwick', confirmedDaysAgo: 33 },
+    campaignEmail: {
+      ...CAMPAIGN_EMAIL,
+      approvedBy: 'Gordon Fenwick',
+      approvedDaysAgo: 31,
+    },
+    imports: [
+      {
+        id: 'imp-1',
+        suppliedBy: 'Gordon Fenwick',
+        suppliedDaysAgo: 32,
+        source: 'Two spreadsheets and a CSV, merged by hand at Lumo',
+        rowsSupplied: 138,
+        rowsLoaded: 110,
+        rowsHeld: 50,
+        rowsRejected: 28,
+        rejectedReason:
+          'Twenty-eight rows were duplicated across the three files, or were commercial sites with no household to contact.',
+      },
+    ],
+    selfServeLinkToken: 'fenwick',
+  },
+  customers: MESSY_CUSTOMERS,
+};
+
+export const PERSONAS: Readonly<Record<PersonaId, Persona>> = {
+  'mid-campaign': MID_CAMPAIGN,
+  'awaiting-approval': AWAITING_APPROVAL,
+  'messy-list': MESSY_LIST,
+};
+
+/** Day offsets to ISO dates, resolved against a single `today` for consistency. */
+const isoDaysAgo = (today: Date, days: number): string => {
+  const d = new Date(today);
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+};
+
+export interface MaterialisedPersona {
+  readonly id: PersonaId;
+  readonly name: string;
+  readonly purpose: string;
+  readonly company: {
+    readonly id: string;
+    readonly name: string;
+    readonly seats: readonly HubSeat[];
+    readonly sender: SenderConfig;
+    readonly attestation: { readonly confirmedBy: string; readonly confirmedOn: string } | null;
+    readonly campaignEmail: {
+      readonly subject: string;
+      readonly preheader: string;
+      readonly body: readonly string[];
+      readonly approved: boolean;
+      readonly approvedBy: string | null;
+      readonly approvedOn: string | null;
+    };
+    readonly imports: readonly {
+      readonly id: string;
+      readonly suppliedBy: string;
+      readonly suppliedOn: string;
+      readonly source: string;
+      readonly rowsSupplied: number;
+      readonly rowsLoaded: number;
+      readonly rowsHeld: number;
+      readonly rowsRejected: number;
+      readonly rejectedReason: string | null;
+    }[];
+    readonly selfServeLinkToken: string;
+  };
+  readonly customers: readonly HubCustomer[];
+  /** The date everything was resolved against, so the UI ages blockers consistently. */
+  readonly asOf: string;
+}
+
+export function materialise(persona: Persona, today = new Date()): MaterialisedPersona {
+  const at = (days: number) => isoDaysAgo(today, days);
+  const { company } = persona;
+
+  return {
+    id: persona.id,
+    name: persona.name,
+    purpose: persona.purpose,
+    company: {
+      id: company.id,
+      name: company.name,
+      seats: company.seats,
+      sender: company.sender,
+      attestation: company.attestation
+        ? {
+            confirmedBy: company.attestation.confirmedBy,
+            confirmedOn: at(company.attestation.confirmedDaysAgo),
+          }
+        : null,
+      campaignEmail: {
+        subject: company.campaignEmail.subject,
+        preheader: company.campaignEmail.preheader,
+        body: company.campaignEmail.body,
+        approved: company.campaignEmail.approvedDaysAgo !== null,
+        approvedBy: company.campaignEmail.approvedBy,
+        approvedOn:
+          company.campaignEmail.approvedDaysAgo === null
+            ? null
+            : at(company.campaignEmail.approvedDaysAgo),
+      },
+      imports: company.imports.map((b) => ({
+        id: b.id,
+        suppliedBy: b.suppliedBy,
+        suppliedOn: at(b.suppliedDaysAgo),
+        source: b.source,
+        rowsSupplied: b.rowsSupplied,
+        rowsLoaded: b.rowsLoaded,
+        rowsHeld: b.rowsHeld,
+        rowsRejected: b.rowsRejected,
+        rejectedReason: b.rejectedReason,
+      })),
+      selfServeLinkToken: company.selfServeLinkToken,
+    },
+    customers: persona.customers.map((c) => ({
+      id: c.id,
+      firstName: c.firstName,
+      lastName: c.lastName,
+      email: c.email,
+      postcode: c.postcode,
+      inverterMake: c.inverterMake,
+      batterySizeKwh: c.batterySizeKwh,
+      importedOn: at(c.importedDaysAgo),
+      importBatchId: c.importBatchId,
+      addedBy: c.addedBy,
+      contact: c.contact,
+      contactSince: at(c.contactSinceDaysAgo),
+      activation: c.activation,
+      activationSince: at(c.activationSinceDaysAgo),
+      match: c.match,
+      matchSince: c.matchSinceDaysAgo === null ? null : at(c.matchSinceDaysAgo),
+      qualification: {
+        everActive: c.everActive,
+        controlActiveSince:
+          c.controlActiveSinceDaysAgo === null ? null : at(c.controlActiveSinceDaysAgo),
+        qualifiedAt: c.qualifiedDaysAgo === null ? null : at(c.qualifiedDaysAgo),
+        paidAt: c.paidDaysAgo === null ? null : at(c.paidDaysAgo),
+      },
+    })),
+    asOf: at(0),
+  };
 }

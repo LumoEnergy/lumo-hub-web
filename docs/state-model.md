@@ -16,31 +16,41 @@ dropped" is a phone call they can make today.
 Every blocker also carries its age. Three days is normal, six weeks is a dead
 lead, and the UI must not present them identically.
 
-## Invite
+## Contact
 
-What happened to the invite. Hub-side only: no part of the platform emits any of this today.
+What happened to the campaign email Lumo sends to the back-book, on the installer’s behalf. No producer today.
 
 | State | Label the installer sees | What is blocking it | Whose job | Recommended action |
 |---|---|---|---|---|
-| `added` | Added, not invited yet | You haven't chosen how they get invited. | You | Pick who makes contact: Lumo, or you. |
-| `staged_for_lumo` | Lumo will contact them | Queued for Lumo to send. | Lumo | — |
-| `sent_by_lumo` | Invited by Lumo | — | Nobody | — |
-| `sent_by_installer` | You invited them | — | Nobody | — |
-| `link_only` | Shared by link or QR | No email address captured, so nobody can chase them and matching depends entirely on them using your link. | You | Get their email if you can. Without it your £50 rests on the link alone. |
-| `no_response` | No response | Invited, and they still haven't signed up. | You | Call them. A second email almost never lands. |
-| `bounced` | Email bounced | The address didn't accept the invite, so they never saw it. | You | Check the address and re-add them with the correction. |
-| `unsubscribed` | Unsubscribed | They opted out of Lumo email. We will not contact them again. | Nobody | — |
+| `imported` | On your list | Loaded from your customer list. Lumo is still checking the details. | Lumo | — |
+| `held_no_email` | No email address | Your list had no usable email for this household, so there is nobody for us to write to. Nothing else about the row is wrong. | You | Add the address if you have it anywhere. Each one you supply is another £50 on the table, and we cannot get it from anywhere but you. |
+| `held_unconfirmed` | Battery not confirmed | We cannot tell from your list whether this household actually has a battery. Sending to solar-only customers wastes the send and risks spam complaints that damage everyone's campaign. | You | Confirm whether they have storage. You are the only one who knows, and a wrong guess either way costs you. |
+| `awaiting_approval` | Ready to send | Cleaned, checked and ready. Waiting on you to approve the email we send on your behalf. | You | Approve the email once and every household on your list goes out. It is the only sign-off we will ask you for. |
+| `queued` | Sending | In the send queue. We deliberately ramp up slowly rather than sending your whole list at once, because a spike of complaints would get every campaign filtered. | Lumo | — |
+| `sent` | Email sent | — | Nobody | — |
+| `opened` | Opened it | — | Nobody | — |
+| `clicked` | Interested, not signed up | They clicked through and then stopped part-way. They are interested and something put them off. | You | The warmest leads on your list. A call from the firm that fitted their battery converts these far better than another email from a company they have never heard of. |
+| `signed_up` | Signed up | — | Nobody | — |
+| `bounced` | Email bounced | The address on your list is dead, so they never saw it. Common on a back-book — people change provider and move house. | You | A better address puts them straight back in the queue. Bounces also hurt our sending reputation, so this one helps the rest of your list too. |
+| `no_response` | No response | Delivered a fortnight ago and never opened. A second email will not fix that. | You | Worth a call if they were a good customer. We will not chase these again — repeatedly mailing people who ignore us is how a sending domain dies. |
+| `unsubscribed` | Opted out | They asked not to be contacted again, so we will not, and neither should you. | Nobody | — |
+| `complained` | Marked as spam | They reported the email. Shown because it is honest and because it is the clearest signal that a list had addresses on it that should not have been there. | Nobody | — |
 
 Permitted transitions:
 
-- `added` -> `staged_for_lumo`, `sent_by_installer`, `link_only`
-- `staged_for_lumo` -> `sent_by_lumo`
-- `sent_by_lumo` -> `no_response`, `bounced`, `unsubscribed`
-- `sent_by_installer` -> `no_response`, `unsubscribed`
-- `link_only` -> `staged_for_lumo`, `sent_by_installer`
-- `no_response` -> `staged_for_lumo`, `sent_by_installer`, `unsubscribed`
-- `bounced` -> `staged_for_lumo`, `sent_by_installer`
+- `imported` -> `held_no_email`, `held_unconfirmed`, `awaiting_approval`
+- `held_no_email` -> `awaiting_approval`
+- `held_unconfirmed` -> `awaiting_approval`, `held_no_email`
+- `awaiting_approval` -> `queued`
+- `queued` -> `sent`, `bounced`
+- `sent` -> `opened`, `clicked`, `signed_up`, `bounced`, `no_response`, `unsubscribed`, `complained`
+- `opened` -> `clicked`, `signed_up`, `no_response`, `unsubscribed`, `complained`
+- `clicked` -> `signed_up`, `no_response`, `unsubscribed`
+- `signed_up` -> _terminal_
+- `bounced` -> `queued`, `held_no_email`
+- `no_response` -> `signed_up`, `unsubscribed`
 - `unsubscribed` -> _terminal_
+- `complained` -> _terminal_
 
 ## Household activation
 
@@ -76,21 +86,21 @@ Permitted transitions:
 
 ## Match
 
-Whether the household who signed up can be tied to the installer who added them. No producer today.
+Whether the household who signed up can be tied to the firm who installed their battery. No producer today.
 
 | State | Label the installer sees | What is blocking it | Whose job | Recommended action |
 |---|---|---|---|---|
-| `matched_email` | Matched on email | — | Nobody | — |
-| `matched_link` | Matched via your link | — | Nobody | — |
-| `unmatched_different_email` | Signed up with a different email | They are on Lumo, but under an address you didn't give us, so nothing ties them to you. Your £50 is not counted while this is open. | You | Tell Lumo the address they actually used and we will tie it to you. Don't re-add them — that just creates a duplicate. |
-| `ambiguous` | More than one possible match | More than one Lumo account could be this household, and we won't guess and risk crediting the wrong installer. | Lumo | Lumo will confirm which account is theirs. We may ask you for a postcode. |
+| `matched_import` | Tied to you | — | Nobody | — |
+| `matched_manual` | Tied to you by hand | — | Nobody | — |
+| `unmatched_different_email` | On Lumo, not credited to you | They are on Lumo and running, but they came in on their own rather than through your campaign, so nothing ties them to you. Your £50 is not counted while this is open. | You | Confirm this is your customer and we will tie it to you. Do not re-add them — that just creates a duplicate and delays it further. |
+| `ambiguous` | More than one possible match | More than one Lumo account could be this household, and we will not guess and risk crediting the wrong firm. | Lumo | Lumo will confirm which account is theirs. We may come back to you for a postcode. |
 
 Permitted transitions:
 
-- `matched_email` -> _terminal_
-- `matched_link` -> _terminal_
-- `unmatched_different_email` -> `matched_email`, `matched_link`
-- `ambiguous` -> `matched_email`, `matched_link`, `unmatched_different_email`
+- `matched_import` -> _terminal_
+- `matched_manual` -> _terminal_
+- `unmatched_different_email` -> `matched_manual`
+- `ambiguous` -> `matched_import`, `matched_manual`, `unmatched_different_email`
 
 ## Earnings
 
@@ -150,26 +160,50 @@ A deliberate output, not a caveat. Designing these here means the real build kno
 front that it has to create them, rather than discovering it late and shipping a screen
 that reports fiction.
 
-### An invite that has a delivery state
+### A campaign send with real delivery feedback
 
 - **Blocks the real build:** yes
-- **States affected:** `added`, `staged_for_lumo`, `sent_by_lumo`, `sent_by_installer`, `link_only`, `no_response`, `bounced`, `unsubscribed`
-- **Why it is missing:** Until now nothing tracked an invite. There is no invite entity, no send, and no delivery feedback anywhere in the estate.
-- **What the real build must create:** An invite record with a real send, a real delivery/bounce/unsubscribe signal from the mail provider, and an age. The "Lumo will contact them" proposition is undeliverable without it.
-- **Evidence:** The live Hub sets lumo_homeowner_email_invite_status = 'Email pending' on both add paths and nothing ever moves it. Its transactional email registry holds one template, admin-auth-alert, which is installer auth. Where real contacts read 'Email sent', a human typed it.
+- **States affected:** `queued`, `sent`, `opened`, `clicked`, `bounced`, `no_response`, `unsubscribed`, `complained`
+- **Why it is missing:** Nothing tracks an outbound send to a household. There is no campaign entity, no send, and no delivery feedback anywhere in the estate.
+- **What the real build must create:** A campaign with a per-household send record, plus a webhook consumer for the mail provider’s delivered, bounced, opened, clicked, unsubscribed and complained events. Without the bounce and complaint events specifically there is no way to protect the sending domain, and without click events there is no way to identify the warm leads that are the installer’s reason to engage at all.
+- **Evidence:** The live Hub sets lumo_homeowner_email_invite_status = 'Email pending' on create and nothing ever moves it. Its transactional email registry holds one template, admin-auth-alert, which is installer auth. Where real contacts read 'Email sent', a human typed it.
 
-### A join between an invited email and a Lumo account
+### An import batch with data-quality outcomes
 
 - **Blocks the real build:** yes
-- **States affected:** `matched_email`, `matched_link`, `unmatched_different_email`, `ambiguous`, `no_account`
-- **Why it is missing:** Nothing reconciles the address an installer typed against the address a household signed up with, so a mismatch is indistinguishable from a lead that never converted.
-- **What the real build must create:** A matching step with an explicit unmatched outcome and a way to resolve it, plus an ambiguity outcome that refuses to guess. Silent non-matching is the failure mode that eats the reward.
+- **States affected:** `imported`, `held_no_email`, `held_unconfirmed`, `awaiting_approval`
+- **Why it is missing:** There is no bulk ingestion path for installer-supplied households, and no concept of a row that was received but held back as unusable.
+- **What the real build must create:** An import batch entity recording who supplied it, when, how many rows arrived, and a per-row outcome — loaded, held for a missing address, held pending a battery confirmation, or rejected as a duplicate. The held outcomes matter most: they are the only work the product asks an installer to do, so they have to be a real queryable state rather than a spreadsheet a human at Lumo keeps.
+- **Evidence:** Nothing in lumo-api, Firestore or the Hub ingests a list. The first imports will be done by hand by Lumo staff, which is the right call for the first few installers and precisely why the resulting rows still need a real home.
+
+### A join between a contacted household and a Lumo account
+
+- **Blocks the real build:** yes
+- **States affected:** `matched_import`, `matched_manual`, `unmatched_different_email`, `ambiguous`, `signed_up`, `no_account`
+- **Why it is missing:** Nothing reconciles the household an installer supplied against the household that signed up, so a mismatch is indistinguishable from a lead that never converted.
+- **What the real build must create:** A per-household token minted at import, carried through the campaign email and the signup flow, so attribution is a fact rather than an inference. Plus an explicit unmatched outcome with a way to resolve it, and an ambiguity outcome that refuses to guess. Silent non-matching is the failure mode that eats the reward.
 - **Evidence:** There is no such join in lumo-api, Firestore or the Hub. The only signal that a household came from an installer is a free-text CRM property.
 
-### An installer entity, and a per-person attribution link
+### An installer company account, with seats and an added-by audit field
 
 - **Blocks the real build:** yes
-- **States affected:** `matched_link`, `link_only`
+- **States affected:** `matched_import`, `matched_manual`
 - **Why it is missing:** There is no installer entity anywhere in the system of record. The only installer-to-household link in the whole estate is partnerTag: a ?partner= URL parameter, cached in the browser, validated server-side only as a string of 1 to 100 characters. lumo-api has no concept of an installer at all.
-- **What the real build must create:** An installer entity in Postgres with real identifiers, a verified household association, and a token that identifies a person or a job rather than an email domain. The incentive only works if you can pay the individual who did the work, and attribution cannot be a string the customer can type.
-- **Evidence:** Production partnerTag values include gbsolar.co.uk, GB_Solar_Ltd, not_sure and test_installer_01. The same firm is counted twice. The 2026-08-06 review named this as the blocker on the entire installer roadmap, independent of where the UI is built.
+- **What the real build must create:** A company entity in Postgres with real identifiers, multiple user seats under it, a verified household association, and an added-by field on every household row. The money is owed to the company; the added-by field exists so the company can manage its own people. Attribution cannot be a string the customer can type.
+- **Evidence:** Production partnerTag values include gbsolar.co.uk, GB_Solar_Ltd, not_sure and test_installer_01. The same firm is counted twice, which is what happens when identity is a free-text field rather than an entity.
+
+### A recorded attestation that the back-book agreed to be contacted
+
+- **Blocks the real build:** yes
+- **States affected:** `awaiting_approval`, `queued`, `complained`
+- **Why it is missing:** Nothing records permission to contact a household, because nothing has ever contacted one.
+- **What the real build must create:** An attestation on the company account: who confirmed that their customers agreed to be contacted about products relating to their installation, when, and covering which import. It is the lawful basis for the whole campaign — Lumo sends as a processor on the installer’s instruction, relying on the installer’s own relationship with the household — so it needs to be an auditable record, not a checkbox whose value is discarded. It also protects the sending domain: a list without real permission generates the complaints that get every installer’s campaign filtered.
+- **Evidence:** No consent or permission artefact exists in the estate for installer-sourced households. A data processing agreement per installer is the contractual half of this and is not a product feature, but nothing should send before both exist.
+
+### Per-installer sender configuration
+
+- **Blocks the real build:** no
+- **States affected:** `awaiting_approval`, `queued`, `sent`
+- **Why it is missing:** All outbound mail today is Lumo-branded transactional email from a single domain. There is no notion of sending on another party’s behalf.
+- **What the real build must create:** A sender config per company: display name and reply-to at minimum, and optionally a verified sending subdomain the installer delegates by publishing DKIM and SPF records in their own DNS. The delegated form is authenticated and consented, which is what distinguishes it from spoofing — DMARC passes precisely because the domain owner published the key. Campaign mail must also leave from a domain entirely separate from the app’s transactional mail, so a bad list cannot take down password resets and control alerts with it.
+- **Evidence:** The estate has one transactional sending identity and one template. Sending thousands of campaign emails from it would put every installer’s campaign and the app’s own mail behind the same reputation.
