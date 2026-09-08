@@ -24,7 +24,10 @@ export function YourListPage() {
   const [approving, setApproving] = useState(false);
 
   const rows = useMemo(() => buildRows(customers, asOf), [customers, asOf]);
-  const quality = useMemo(() => dataQualityGroups(rows), [rows]);
+  const held = useMemo(
+    () => dataQualityGroups(rows).filter((group) => group.contact !== 'bounced'),
+    [rows],
+  );
   const batch = company.imports[0];
   const approved = company.campaignEmail.approved;
   const readyToSend = customers.filter((c) => c.contact === 'awaiting_approval').length;
@@ -67,13 +70,17 @@ export function YourListPage() {
               </p>
             ) : null}
 
-            {quality.length > 0 ? (
+            {/* Held rows only. Bounces are also something only the firm can fix, and
+                they appear alongside these on the customers screen — but they are
+                campaign feedback, not an import outcome, so listing them under a
+                "Held back" figure of 34 made the breakdown add up to 52. */}
+            {held.length > 0 ? (
               <div className="mt-3 space-y-2 border-t border-line pt-3">
                 <p className="text-[14px] font-semibold text-ink">
                   Held back, because only you can resolve these
                 </p>
                 <ul className="space-y-1.5">
-                  {quality.map((group) => (
+                  {held.map((group) => (
                     <li key={group.contact} className="text-[14px] text-ink-soft">
                       <span className="tnum font-semibold text-ink">{group.rows.length}</span>{' '}
                       {group.label.toLowerCase()}

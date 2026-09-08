@@ -87,8 +87,25 @@ describe('the customers screen', () => {
     // leaves the per-row queue genuinely empty until someone approves.
     mount('awaiting-approval', <CustomersPage />);
     expect(screen.queryByRole('table')).toBeNull();
-    expect(bodyText()).toMatch(/Nothing needs you/i);
+    expect(bodyText()).toMatch(/Nothing else needs you one at a time/i);
     expect(bodyText()).not.toMatch(/Approve the email/);
+  });
+
+  it('does not put the same label on two different numbers', () => {
+    // The strip counts the funnel; the toggle counts the queue. When the strip said
+    // "Need you 75" directly above a "Needs you 21" toggle, both were correct and
+    // the screen was still wrong.
+    mount('mid-campaign', <CustomersPage />);
+    expect(bodyText()).not.toMatch(/Need you/);
+    expect(bodyText()).toMatch(/Signed up/);
+  });
+
+  it('does not claim nothing needs you while callouts say otherwise', () => {
+    mount('awaiting-approval', <CustomersPage />);
+    const text = bodyText();
+    expect(text).toMatch(/missing an email address/i);
+    expect(text).toMatch(/Nothing else needs you one at a time/i);
+    expect(text).not.toMatch(/Nothing needs you\b/);
   });
 
   it('never shows a forecast, in any persona', () => {
@@ -137,6 +154,17 @@ describe('the your-list screen', () => {
     expect(text).toMatch(/Held back/);
     expect(text).toMatch(/Could not use/);
     expect(text).toMatch(/exact duplicates/i);
+  });
+
+  it('breaks down the held figure into numbers that sum to it', () => {
+    mount('mid-campaign', <YourListPage />);
+    const panel = screen.getByRole('region', { name: 'What we loaded' });
+    const text = panel.textContent ?? '';
+    // A bounce is campaign feedback, not an import outcome. Listing it here made a
+    // "Held back: 34" headline break down into 28 + 6 + 18.
+    expect(text).toMatch(/28 missing an email address/i);
+    expect(text).toMatch(/6 battery not confirmed/i);
+    expect(text).not.toMatch(/bounced/i);
   });
 
   it('shows the email exactly as it arrives, sent as the firm', () => {

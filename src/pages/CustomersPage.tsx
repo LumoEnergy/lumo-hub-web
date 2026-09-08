@@ -10,7 +10,7 @@ import {
   earningCount,
   earningsSummary,
   gbp,
-  needsAttentionCount,
+  signedUpCount,
   silentCohort,
   sortRows,
   unmatchedRows,
@@ -46,9 +46,10 @@ export function CustomersPage() {
   const quality = useMemo(() => dataQualityGroups(rows), [rows]);
   const silent = useMemo(() => silentCohort(rows), [rows]);
   const summary = useMemo(() => earningsSummary(rows), [rows]);
-  const attention = needsAttentionCount(rows);
 
   const queueRows = useMemo(() => groups.flatMap((g) => g.rows), [groups]);
+  /** Whether anything above the list is already carrying work in bulk. */
+  const grouped = unmatched.length > 0 || quality.length > 0;
   const tableRows = useMemo(
     () => sortRows(view === 'queue' ? queueRows : rows, sort, direction),
     [view, queueRows, rows, sort, direction],
@@ -103,9 +104,14 @@ export function CustomersPage() {
           />
         </div>
       ) : (
+        // The funnel, not the workload. An earlier version led with "Need you 75",
+        // which contradicted the "Needs you 21" toggle a few pixels below it — the
+        // same words, a different scope, two numbers. The work is described by the
+        // callouts and the toggle, each next to the rows it refers to; the strip
+        // answers a different question, which is how the list is converting.
         <SummaryStrip
           items={[
-            { label: 'Need you', value: String(attention), tone: attention > 0 ? 'warn' : 'default' },
+            { label: 'Signed up', value: String(signedUpCount(rows)) },
             { label: 'Earning', value: String(earningCount(rows)), tone: 'accent' },
             { label: 'Yours so far', value: gbp(summary.earnedGbp), tone: 'accent' },
           ]}
@@ -170,7 +176,7 @@ export function CustomersPage() {
       {/* Desktop: one sortable table. */}
       <div className="mt-3 hidden lg:block">
         {tableRows.length === 0 ? (
-          <NothingToDo total={rows.length} onShowAll={() => setView('all')} />
+          <NothingToDo total={rows.length} grouped={grouped} onShowAll={() => setView("all")} />
         ) : (
           <CustomerTable
             rows={tableRows}
@@ -186,7 +192,7 @@ export function CustomersPage() {
       <div className="lg:hidden">
         {view === 'queue' ? (
           groups.length === 0 ? (
-            <NothingToDo total={rows.length} onShowAll={() => setView('all')} />
+            <NothingToDo total={rows.length} grouped={grouped} onShowAll={() => setView("all")} />
           ) : (
             groups.map((group) => (
               <section key={group.owner}>
@@ -248,11 +254,31 @@ function Fixer({ row, onDone }: { row: CustomerRow; onDone: () => void }) {
   return null;
 }
 
-function NothingToDo({ total, onShowAll }: { total: number; onShowAll: () => void }) {
+/**
+ * The empty queue has to know what is above it.
+ *
+ * On the awaiting-approval persona this sat under an unapproved campaign and 34 held
+ * rows and said "Nothing needs you", which was flatly untrue and made the callouts
+ * look like decoration. An empty state that contradicts the screen it is on is worse
+ * than no empty state.
+ */
+function NothingToDo({
+  total,
+  grouped,
+  onShowAll,
+}: {
+  total: number;
+  grouped: boolean;
+  onShowAll: () => void;
+}) {
   return (
     <EmptyState
-      title="Nothing needs you"
-      body="Every household is either earning, waiting on something that resolves itself, or one we have stopped chasing. This is the good outcome."
+      title={grouped ? 'Nothing else needs you one at a time' : 'Nothing needs you'}
+      body={
+        grouped
+          ? 'Your attention goes to the groups above. Every other household is either earning, waiting on something that resolves itself, or one we have stopped chasing.'
+          : 'Every household is either earning, waiting on something that resolves itself, or one we have stopped chasing. This is the good outcome.'
+      }
       action={
         <Button variant="secondary" onClick={onShowAll}>
           See all {total.toLocaleString('en-GB')}

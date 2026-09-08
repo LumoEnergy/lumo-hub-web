@@ -58,26 +58,61 @@ if (!base) {
 const argument = (process.argv[2] ?? DEV_HOST).replace(/\/$/, '');
 const origin = argument.includes(base) ? argument.split(base)[0] : argument;
 
-/** What each persona has to prove, beyond simply not being blank. */
+/**
+ * What each persona has to prove, beyond simply not being blank.
+ *
+ * An unknown `?p=` falls back to the default persona rather than erroring, so a
+ * stale id here would render a perfectly good page and pass on the wrong scenario.
+ * Every persona therefore asserts something only it shows. The label check is the
+ * backstop: the shell prints the active persona, so a fallback cannot pass silently.
+ */
 const PERSONAS = [
   {
-    id: 'established',
-    expect: [/Your customers/, /Earning/, /£/],
-    // The investor demo is worthless if the portfolio reads as empty.
-    reject: [/No customers yet/],
+    id: 'mid-campaign',
+    expect: [
+      /Demo: Mid-campaign/,
+      /Your customers/,
+      // Money on the board, and the household earning for nobody.
+      /Yours so far/,
+      /going to nobody/i,
+    ],
+    reject: [/Nothing has been sent yet/],
   },
   {
-    id: 'first-run',
-    expect: [/first customer/i],
-    // The empty state must not invent a portfolio or a forecast.
-    reject: [/Need chasing/, /Yours so far/],
+    id: 'awaiting-approval',
+    expect: [
+      /Demo: Awaiting approval/,
+      /Nothing has been sent yet/,
+      /only sign-off/,
+    ],
+    // Nothing has sent, so there is no money and there must be no guess at any.
+    reject: [/Yours so far/, /could earn/i, /projected/i],
   },
   {
-    id: 'messy',
-    // The whole point of this persona is that the unmatched household is visible.
-    expect: [/Your customers/, /nothing ties them to you|possible match/i, /Needs attention/],
-    reject: [/No customers yet/],
+    id: 'messy-list',
+    expect: [
+      /Demo: Messy list/,
+      // The research conversation: a filthy list, and someone earning regardless.
+      /missing an email address/i,
+      /email bounced/i,
+      /going to nobody/i,
+    ],
+    reject: [/Nothing has been sent yet/],
   },
+];
+
+/**
+ * Copy that must never appear anywhere, in any persona.
+ *
+ * The two review notes that changed the product: no individual framing, and no
+ * money that depends on a conversion rate nobody has measured.
+ */
+const NEVER = [
+  /your personal link/i,
+  /QR code/i,
+  /you could earn/i,
+  /projected/i,
+  /per year/i,
 ];
 
 async function renderedText(url) {
@@ -120,7 +155,7 @@ for (const persona of PERSONAS) {
     for (const pattern of persona.expect) {
       if (!pattern.test(text)) problems.push(`missing expected ${pattern}`);
     }
-    for (const pattern of persona.reject) {
+    for (const pattern of [...persona.reject, ...NEVER]) {
       if (pattern.test(text)) problems.push(`unexpectedly present: ${pattern}`);
     }
   } catch (error) {
@@ -133,7 +168,7 @@ for (const persona of PERSONAS) {
     for (const problem of problems) console.error(`       ${problem}`);
     console.error(`       rendered: ${text.slice(0, 200) || '(nothing)'}`);
   } else {
-    console.log(`ok   ${persona.id.padEnd(12)} "${text.slice(0, 70)}…"`);
+    console.log(`ok   ${persona.id.padEnd(18)} "${text.slice(0, 70)}…"`);
   }
 }
 
