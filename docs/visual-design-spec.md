@@ -243,6 +243,17 @@ be a disposable shell around two durable modules.
   data, would set an expectation the real build cannot meet on the timeline being tested.
 - Any revenue projection or "you could earn" estimate, on any screen, in any persona.
 - Any control that asks the firm to record something they did outside the product.
+- **A count multiplied by £50, where the money depends on those households converting.**
+  This one is subtle enough to have shipped once. "28 missing an email address — that is
+  £1,400 we cannot go after" reads like a fact and prices the fix at 100% conversion, on a
+  channel where a realistic back-book return is a fraction of that. Quote the rate per
+  household instead: it is true, and it still makes the argument. A total is only allowed
+  where the money is already earned — the unmatched callout and the earnings screen, where
+  the households exist, the 30 days are served and the sum is real.
+- **The same label over two different numbers.** "Need you 75" above a "Needs you 21" filter
+  is two correct numbers and one broken screen. If a figure summarises the workload and a
+  control filters it, they either agree or they are named differently enough that nobody has
+  to work out why they do not.
 
 ## The two callouts that break the pattern
 
