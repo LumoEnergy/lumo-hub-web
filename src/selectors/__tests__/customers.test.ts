@@ -152,12 +152,43 @@ describe('table sorting', () => {
   it('puts unmatched first, then anything needing the firm, by default', () => {
     const sorted = sortRows(rows, 'priority', 'desc');
     expect(sorted[0].resolved.track).toBe('match');
-    const firstIgnorable = sorted.findIndex((row) => !row.resolved.needsAttention);
-    const lastAttention = sorted.reduce(
-      (last, row, i) => (row.resolved.needsAttention ? i : last),
+
+    // Three blocks, in order: unmatched, then everything needing the firm, then the
+    // rest. Unmatched is deliberately not part of `needsYouIndividually` — it is a
+    // money callout rather than a task — so the block boundary is measured after
+    // those rows rather than by that predicate.
+    const afterUnmatched = sorted.filter((row) => row.resolved.track !== 'match');
+    const firstIgnorable = afterUnmatched.findIndex((row) => !needsYouIndividually(row));
+    const lastAttention = afterUnmatched.reduce(
+      (last, row, i) => (needsYouIndividually(row) ? i : last),
       -1,
     );
     expect(firstIgnorable).toBeGreaterThan(lastAttention);
+  });
+
+  it('leads with the phone calls, not with the data entry', () => {
+    // Ranking purely by age opened the screen on 26 identical "No email address"
+    // rows, which is wallpaper: it buried the fourteen people who had actually
+    // clicked through and made the whole list read as a chore. A warm lead is a call
+    // worth making today; a missing address is an afternoon of admin.
+    const sorted = sortRows(rows, 'priority', 'desc');
+    const firstClicked = sorted.findIndex((row) => row.customer.contact === 'clicked');
+    const firstHeld = sorted.findIndex((row) => row.customer.contact === 'held_no_email');
+    expect(firstClicked).toBeGreaterThan(-1);
+    expect(firstHeld).toBeGreaterThan(-1);
+    expect(firstClicked).toBeLessThan(firstHeld);
+  });
+
+  it('still keeps every household that needs the firm above the ones that do not', () => {
+    // Re-ranking within the attention block must not let an admin job fall below a
+    // household nobody has to touch.
+    const sorted = sortRows(rows, 'priority', 'desc');
+    const lastHeld = sorted.reduce(
+      (last, row, i) => (row.customer.contact === 'held_no_email' ? i : last),
+      -1,
+    );
+    const firstSilent = sorted.findIndex((row) => row.customer.contact === 'no_response');
+    expect(lastHeld).toBeLessThan(firstSilent);
   });
 
   it('reverses exactly, even though the list has duplicate names', () => {

@@ -103,10 +103,14 @@ export function DashboardPage() {
 
             {attention > 0 ? (
               <Panel title="Waiting on you" meta={`${attention} households`}>
+                {/* Name only what the count contains. An earlier version ended
+                    "…or one that is earning with nothing tying it to you", which is
+                    the unmatched callout — deliberately NOT in this figure. */}
                 <p className="text-[14px] leading-snug text-ink-soft">
                   Most of your list needs nothing from you. These are the households where we
-                  have run out of things we can do without you — a missing address, a battery
-                  we cannot confirm, or one that is earning with nothing tying it to you.
+                  have run out of things we can do without you — a missing address, an email
+                  that bounced, a battery we cannot confirm, or someone who clicked through
+                  and stopped.
                 </p>
                 <div className="mt-3">
                   <Link to="customers?filter=attention">

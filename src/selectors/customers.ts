@@ -306,8 +306,22 @@ export function sortRows(
 
     switch (key) {
       case 'priority': {
-        const rank = (row: CustomerRow) =>
-          row.resolved.track === 'match' ? 2 : row.resolved.needsAttention ? 1 : 0;
+        const rank = (row: CustomerRow) => {
+          if (row.resolved.track === 'match') return 4;
+          if (!needsYouIndividually(row)) return 0;
+          // A WARM LEAD OUTRANKS AN ADMIN JOB, and the two are not the same kind of
+          // work. Somebody who clicked through and stopped is a phone call worth
+          // making today; a missing address is an afternoon of data entry, and there
+          // are usually dozens of them. Ranking purely by age put 26 identical "No
+          // email address" rows at the top of the default view, which is wallpaper —
+          // it buried the fourteen people who had actually shown interest and made
+          // the whole list look like a chore.
+          return DATA_QUALITY_STATES.includes(row.customer.contact as DataQualityState)
+            ? 1
+            : row.customer.contact === 'clicked'
+              ? 3
+              : 2;
+        };
         return rank(b) - rank(a) || b.resolved.ageDays - a.resolved.ageDays || tie;
       }
       case 'household':
