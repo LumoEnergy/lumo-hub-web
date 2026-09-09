@@ -4,16 +4,11 @@ import type { PersonaId } from '../../fixtures';
 import { REWARD_GBP } from '../../state';
 import {
   buildRows,
-  dataQualityGroups,
   earningsSummary,
-  filterRows,
-  gbp,
   moneyPosition,
-  needsAttentionCount,
-  needsYouIndividually,
   sortRows,
-  unmatchedRows,
 } from '../customers';
+import { STALE_CLICK_DAYS, needsYou, rowsForView, scheduledSendDates } from '../views';
 
 const TODAY = new Date('2026-09-08T00:00:00Z');
 
@@ -24,37 +19,38 @@ const rowsFor = (persona: PersonaId) => {
 
 describe('what needs the firm, one household at a time', () => {
   const rows = rowsFor('messy-list');
-  const queued = filterRows(rows, 'attention');
+  const queued = needsYou(rows);
 
-  it('excludes anything nobody needs to act on', () => {
+  it('is only ever the four jobs, plus the money going nowhere', () => {
+    // The previous version derived this from state dispositions, which quietly swept
+    // in activation problems a firm can do nothing about. Naming the set is the point:
+    // a to-do list is only a to-do list if everything on it is doable.
     for (const row of queued) {
-      expect(row.resolved.needsAttention, row.customer.id).toBe(true);
-      expect(row.resolved.owner, row.customer.id).not.toBe('nobody');
+      const allowed =
+        row.resolved.track === 'match' ||
+        ['held_no_email', 'held_unconfirmed', 'bounced', 'clicked'].includes(
+          row.customer.contact,
+        );
+      expect(allowed, `${row.customer.id} is ${row.customer.contact}`).toBe(true);
     }
   });
 
-  it('keeps unmatched households out, so they cannot hide among ordinary rows', () => {
-    // They are pinned above the list as a money callout instead. A row that looks
-    // like every other row has already failed at the one job that matters.
-    const ids = queued.map((r) => r.customer.id);
-    const unmatched = unmatchedRows(rows).map((r) => r.customer.id);
+  it('now includes the unmatched households, because the callout is gone', () => {
+    // They used to be pinned above the list as a banner, which made "£100 of yours
+    // is going to nobody" the loudest thing on the screen on every single visit.
+    // A job belongs next to the other jobs.
+    const unmatched = queued.filter((row) => row.resolved.track === 'match');
     expect(unmatched.length).toBeGreaterThan(0);
-    for (const id of unmatched) {
-      expect(ids).not.toContain(id);
-    }
   });
 
-  it('does include the missing addresses, because each needs a different answer', () => {
-    // These used to be excluded on the grounds that fifty of them is a batch job.
-    // True of the old card queue, false of a filtered table — and it made the count
-    // say nobody needed you on an account whose only work was 50 missing addresses.
+  it('includes the missing addresses, because each needs a different answer', () => {
     const states = queued.map((r) => r.customer.contact);
     expect(states).toContain('held_no_email');
     expect(states).toContain('held_unconfirmed');
   });
 
   it('never includes a transient state a firm cannot influence', () => {
-    const live = filterRows(rowsFor('mid-campaign'), 'attention');
+    const live = needsYou(rowsFor('mid-campaign'));
     const transient = live.filter(
       (row) =>
         row.customer.activation === 'Smart Control Test Running' ||
@@ -64,20 +60,21 @@ describe('what needs the firm, one household at a time', () => {
     expect(transient).toEqual([]);
   });
 
-  it('leaves the warm leads in as named people', () => {
-    // Twelve humans a firm would ring is a call list; a number is not.
-    const live = filterRows(rowsFor('mid-campaign'), 'attention');
+  it('only chases a click once it has gone cold', () => {
+    // A click from this morning is not a task, and putting it on a call list trains
+    // people to ignore the call list.
+    const live = needsYou(rowsFor('mid-campaign'));
     const clicked = live.filter((row) => row.customer.contact === 'clicked');
-    expect(clicked.length).toBeGreaterThan(9);
+    expect(clicked.length).toBeGreaterThan(0);
     for (const row of clicked) {
-      expect(row.resolved.owner).toBe('installer');
+      expect(row.resolved.ageDays, row.customer.id).toBeGreaterThanOrEqual(STALE_CLICK_DAYS);
     }
   });
 
   it('never includes the silent majority', () => {
-    // The largest state in any campaign. If it ever enters this set, the filter is
+    // The largest state in any campaign. If it ever enters this set the view is
     // useless, so this is the assertion protecting the whole screen.
-    const live = filterRows(rowsFor('mid-campaign'), 'attention');
+    const live = needsYou(rowsFor('mid-campaign'));
     expect(live.filter((row) => row.customer.contact === 'no_response')).toEqual([]);
   });
 
@@ -86,109 +83,101 @@ describe('what needs the firm, one household at a time', () => {
     const kestrel = rowsFor('awaiting-approval');
     const awaiting = kestrel.filter((row) => row.customer.contact === 'awaiting_approval');
     expect(awaiting.length).toBeGreaterThan(100);
-    expect(awaiting.every((row) => !needsYouIndividually(row))).toBe(true);
+    const needing = needsYou(kestrel).map((row) => row.customer.id);
+    for (const row of awaiting) {
+      expect(needing, row.customer.id).not.toContain(row.customer.id);
+    }
   });
 
-  it('counts exactly what the filter shows, because one links to the other', () => {
-    // The dashboard states a number and links straight to this filter. Two different
+  it('is the same set the dashboard counts and the tab shows', () => {
+    // The dashboard states a number and links straight to this view. Two different
     // answers a click apart is the screen contradicting itself.
     for (const persona of ['mid-campaign', 'awaiting-approval', 'messy-list'] as const) {
       const all = rowsFor(persona);
-      expect(needsAttentionCount(all), persona).toBe(filterRows(all, 'attention').length);
+      expect(needsYou(all).length, persona).toBe(rowsForView(all, 'attention').length);
     }
   });
 });
 
-describe('the data-quality arguments', () => {
-  const rows = rowsFor('messy-list');
-  const groups = dataQualityGroups(rows);
+describe('the five views', () => {
+  const rows = rowsFor('mid-campaign');
 
-  it('groups the three defects only a firm can resolve', () => {
-    expect(groups.map((g) => g.contact)).toEqual([
-      'held_no_email',
-      'held_unconfirmed',
-      'bounced',
-    ]);
-  });
-
-  it('quotes the reward per household and never a multiplied total', () => {
-    // 41 missing addresses is not "£2,050 we are losing" — that prices the fix at a
-    // 100% conversion rate nobody will hit, and inventing money for an installer who
-    // has not been paid yet is how this product loses its credibility. The per-
-    // household rate is the only figure here that is true.
-    for (const group of groups) {
-      expect(group).not.toHaveProperty('atStakeGbp');
-      const total = gbp(group.rows.length * REWARD_GBP);
-      expect(group.argument, `${group.contact} states a fantasy total`).not.toContain(total);
-    }
-    const emails = groups.find((g) => g.contact === 'held_no_email');
-    expect(emails!.argument).toContain(`£${REWARD_GBP}`);
-  });
-
-  it('makes an argument rather than issuing an instruction', () => {
-    for (const group of groups) {
-      expect(group.argument.length, group.contact).toBeGreaterThan(80);
+  it('puts every household in All and nowhere near all of them anywhere else', () => {
+    expect(rowsForView(rows, 'all').length).toBe(rows.length);
+    for (const view of ['invited', 'waiting', 'attention', 'active'] as const) {
+      expect(rowsForView(rows, view).length, view).toBeLessThan(rows.length);
     }
   });
 
-  it('accounts for every affected row exactly once', () => {
-    const counted = groups.flatMap((g) => g.rows.map((r) => r.customer.id));
-    expect(new Set(counted).size).toBe(counted.length);
-    const expected = rows.filter((row) =>
-      ['held_no_email', 'held_unconfirmed', 'bounced'].includes(row.customer.contact),
-    );
-    expect(counted.length).toBe(expected.length);
+  it('never has a household both invited and not yet contacted', () => {
+    const invited = new Set(rowsForView(rows, 'invited').map((r) => r.customer.id));
+    for (const row of rowsForView(rows, 'waiting')) {
+      expect(invited, row.customer.id).not.toContain(row.customer.id);
+    }
   });
 
-  it('drops a group with no rows rather than saying "0 bounced"', () => {
-    const clean = dataQualityGroups(rowsFor('awaiting-approval'));
-    expect(clean.map((g) => g.contact)).toEqual(['held_no_email', 'held_unconfirmed']);
+  it('shows the broken live households, not just the healthy ones', () => {
+    // A monitoring view that hides the disconnected ones is a monitoring view nobody
+    // can use, which is why Active is "on the platform" rather than "earning".
+    const active = rowsForView(rows, 'active');
+    const running = active.filter((r) => r.customer.activation === 'Smart Control Active');
+    expect(active.length).toBeGreaterThan(running.length);
+  });
+
+  it('gives every queued household a real send date and every held one none', () => {
+    // The schedule says 100 a day, so the hundred-and-first person genuinely goes
+    // tomorrow. A date next to a household with no address would be a promise the
+    // product cannot keep.
+    const loaded = loadPersona('mid-campaign', TODAY);
+    const dates = scheduledSendDates(rows, loaded.company);
+
+    const queued = rows.filter((r) => r.customer.contact === 'queued');
+    expect(queued.length).toBeGreaterThan(0);
+    for (const row of queued) {
+      expect(dates.get(row.customer.id), row.customer.id).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+    for (const row of rows.filter((r) => r.customer.contact === 'held_no_email')) {
+      expect(dates.has(row.customer.id), row.customer.id).toBe(false);
+    }
+  });
+
+  it('spreads the queue across the batches rather than dumping it on day one', () => {
+    const loaded = loadPersona('mid-campaign', TODAY);
+    const dates = [...scheduledSendDates(rows, loaded.company).values()];
+    expect(new Set(dates).size).toBeGreaterThan(1);
   });
 });
 
 describe('table sorting', () => {
   const rows = rowsFor('mid-campaign');
 
-  it('puts unmatched first, then anything needing the firm, by default', () => {
+  it('runs the list backwards down the funnel by default', () => {
+    // A CHANGE OF MIND. It used to put the firm's chores at the top, which is right
+    // for a queue and wrong for a default view: opening on 26 identical "No email
+    // address" rows makes a working campaign look like a mess. The chores have their
+    // own tab now.
     const sorted = sortRows(rows, 'priority', 'desc');
-    expect(sorted[0].resolved.track).toBe('match');
+    expect(sorted[0].customer.contact).toBe('signed_up');
+    expect(sorted[0].customer.activation).toBe('Smart Control Active');
 
-    // Three blocks, in order: unmatched, then everything needing the firm, then the
-    // rest. Unmatched is deliberately not part of `needsYouIndividually` — it is a
-    // money callout rather than a task — so the block boundary is measured after
-    // those rows rather than by that predicate.
-    const afterUnmatched = sorted.filter((row) => row.resolved.track !== 'match');
-    const firstIgnorable = afterUnmatched.findIndex((row) => !needsYouIndividually(row));
-    const lastAttention = afterUnmatched.reduce(
-      (last, row, i) => (needsYouIndividually(row) ? i : last),
+    const lastSignedUp = sorted.reduce(
+      (last, row, i) => (row.customer.contact === 'signed_up' ? i : last),
       -1,
     );
-    expect(firstIgnorable).toBeGreaterThan(lastAttention);
+    const firstQueued = sorted.findIndex((row) => row.customer.contact === 'queued');
+    expect(lastSignedUp).toBeLessThan(firstQueued);
   });
 
-  it('leads with the phone calls, not with the data entry', () => {
-    // Ranking purely by age opened the screen on 26 identical "No email address"
-    // rows, which is wallpaper: it buried the fourteen people who had actually
-    // clicked through and made the whole list read as a chore. A warm lead is a call
-    // worth making today; a missing address is an afternoon of admin.
+  it('keeps the opted-out below the households still in play', () => {
+    // Further through the campaign but over. Sorting them above live prospects would
+    // fill the top of the list with dead ends.
     const sorted = sortRows(rows, 'priority', 'desc');
-    const firstClicked = sorted.findIndex((row) => row.customer.contact === 'clicked');
-    const firstHeld = sorted.findIndex((row) => row.customer.contact === 'held_no_email');
-    expect(firstClicked).toBeGreaterThan(-1);
-    expect(firstHeld).toBeGreaterThan(-1);
-    expect(firstClicked).toBeLessThan(firstHeld);
-  });
-
-  it('still keeps every household that needs the firm above the ones that do not', () => {
-    // Re-ranking within the attention block must not let an admin job fall below a
-    // household nobody has to touch.
-    const sorted = sortRows(rows, 'priority', 'desc');
-    const lastHeld = sorted.reduce(
-      (last, row, i) => (row.customer.contact === 'held_no_email' ? i : last),
+    const firstOptedOut = sorted.findIndex((row) => row.customer.contact === 'unsubscribed');
+    const lastClicked = sorted.reduce(
+      (last, row, i) => (row.customer.contact === 'clicked' ? i : last),
       -1,
     );
-    const firstSilent = sorted.findIndex((row) => row.customer.contact === 'no_response');
-    expect(lastHeld).toBeLessThan(firstSilent);
+    expect(lastClicked).toBeLessThan(firstOptedOut);
   });
 
   it('reverses exactly, even though the list has duplicate names', () => {

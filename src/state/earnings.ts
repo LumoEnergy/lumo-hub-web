@@ -2,7 +2,7 @@ import type { StateDefinition, StateTrack } from './types';
 import { fullDaysBetween } from './age';
 
 /**
- * Earnings state — the installer's £50 per household.
+ * Earnings state, the installer's £50 per household.
  *
  * TWO COMMERCIAL RULES ARE ENCODED HERE. Both were settled deliberately, and
  * changing either changes a commitment made to installers, so change them here and
@@ -13,14 +13,14 @@ import { fullDaysBetween } from './age';
  *    `deriveEarningsState` below.
  *
  * 2. CLAWBACK. Confirmed is final. Once the 30 days are served the £50 is not
- *    reversed, even if control later drops — an installer cannot control a household
+ *    reversed, even if control later drops, an installer cannot control a household
  *    unlinking six months after the job. Expressed structurally: `confirmed` has NO
  *    transition to `lapsed`. That single missing edge is the whole policy, and
  *    `earnings.test.ts` asserts it.
  *
  * The amount is flat and deliberately a single constant. The household-side grid
  * reward is banded by battery size, and whether the installer fee should band with it
- * is an open commercial question rather than a decided one — so it is one line to
+ * is an open commercial question rather than a decided one, so it is one line to
  * change when that decision is taken.
  *
  * ON OWNERSHIP. Nobody "owns" `not_eligible`, `qualifying` or `lapsed`: they are
@@ -30,6 +30,27 @@ import { fullDaysBetween } from './age';
  */
 
 export const REWARD_GBP = 50;
+
+/**
+ * What the HOUSEHOLD is told they will earn, per year, for helping the grid.
+ *
+ * A different thing from `REWARD_GBP` entirely, and the two must never be added
+ * together or shown in the same sentence without saying whose money is whose. £50 is
+ * the firm's fee for a household that connects and stays connected. This is the
+ * customer's own guaranteed grid-rewards pay-out, and it is the headline the campaign
+ * email now leads on.
+ *
+ * ONE NUMBER STANDING IN FOR A BAND, and that is a real gap rather than a rounding.
+ * The production pay-out is banded by battery size, so a flat "£150 a year" is the
+ * figure for one band and is wrong for a household outside it. It is fine in a
+ * prototype whose job is to test whether leading on the grid reward changes installer
+ * interest, and it is not fine in an email that actually sends: the real thing has to
+ * resolve the band per household from the battery size on the record, which is
+ * exactly why `batterySizeKwh` is on the customer and nullable.
+ *
+ * See docs/state-model.md, producer gaps.
+ */
+export const GRID_REWARD_GBP = 150;
 export const QUALIFYING_DAYS = 30;
 
 export const EARNINGS_STATE_IDS = [
@@ -114,7 +135,7 @@ export interface QualificationInput {
   /**
    * Start of the CURRENT unbroken run of `Smart Control Active`, as an ISO date.
    * `null` when control is not active right now. Any drop clears it, which is how
-   * "consecutive" is enforced — there is no accumulator to game.
+   * "consecutive" is enforced, there is no accumulator to game.
    */
   readonly controlActiveSince: string | null;
   /**

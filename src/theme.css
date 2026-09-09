@@ -9,15 +9,17 @@
  * to white is how a shared token set becomes a trap.
  */
 :root {
-  --hub-page: #f6f7f8;
+  /* Warmed off neutral grey. The first build was correct and cold, and cold reads
+     as unfinished. These are barely-there hue shifts, not decoration. */
+  --hub-page: #f7f7f5;
   --hub-surface: #ffffff;
-  --hub-surface-sunk: #eff1f2;
-  --hub-line: #e3e6e8;
-  --hub-line-strong: #cdd3d6;
+  --hub-surface-sunk: #f1f1ee;
+  --hub-line: #e5e5e0;
+  --hub-line-strong: #cfd0c9;
 
-  --hub-text: #0e1113;
-  --hub-text-soft: #5b6469;
-  --hub-text-mute: #8a9297;
+  --hub-text: #12140f;
+  --hub-text-soft: #5c625b;
+  --hub-text-mute: #888e86;
 
   /* #7DE370 is a dark-UI green and fails contrast for text on white at any size.
      --hub-accent is a darkened sibling of the same hue for anything containing a
@@ -34,6 +36,30 @@
   --hub-age-stale-bg: #fcebdd;
   --hub-age-dead-fg: #b3261e;
   --hub-age-dead-bg: #fdecea;
+
+  /**
+   * THE JOURNEY PALETTE. Slate to blue to teal to green, in that order, because the
+   * campaign runs in that order.
+   *
+   * The first build was greys plus one green plus a warning amber, which was
+   * defensible and looked like a spreadsheet. Colour here is not decoration: the
+   * status column and the funnel are the same five stages, so giving a stage one
+   * colour in both means a glance at either recognises the other.
+   *
+   * Teal sits between blue and green on purpose. A click is progress towards money
+   * but is not money, and green stays reserved for money, so the bridge hue does the
+   * work without breaking that rule.
+   */
+  --hub-wait-fg: #55605e;
+  --hub-wait-bg: #eceeec;
+  --hub-sent-fg: #1c5488;
+  --hub-sent-bg: #e8f1f9;
+  --hub-open-fg: #135d84;
+  --hub-open-bg: #e4f1f7;
+  --hub-click-fg: #0c6560;
+  --hub-click-bg: #e1f2f0;
+  --hub-warn-fg: #92550c;
+  --hub-warn-bg: #fdf3e1;
 }
 
 @theme inline {
@@ -57,6 +83,17 @@
   --color-stale-bg: var(--hub-age-stale-bg);
   --color-dead-fg: var(--hub-age-dead-fg);
   --color-dead-bg: var(--hub-age-dead-bg);
+
+  --color-wait-fg: var(--hub-wait-fg);
+  --color-wait-bg: var(--hub-wait-bg);
+  --color-sent-fg: var(--hub-sent-fg);
+  --color-sent-bg: var(--hub-sent-bg);
+  --color-open-fg: var(--hub-open-fg);
+  --color-open-bg: var(--hub-open-bg);
+  --color-click-fg: var(--hub-click-fg);
+  --color-click-bg: var(--hub-click-bg);
+  --color-warn-fg: var(--hub-warn-fg);
+  --color-warn-bg: var(--hub-warn-bg);
 
   --font-sans: Figtree, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 

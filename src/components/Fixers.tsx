@@ -10,7 +10,7 @@ import { Button, Field } from './ui';
  *
  * Everything else the Hub shows is read-only, deliberately: the premise is that Lumo
  * does the work and the firm reads the result. These three inputs exist because they
- * are the only facts Lumo genuinely cannot obtain any other way — an email address
+ * are the only facts Lumo genuinely cannot obtain any other way, an email address
  * that was never in the export, whether a household actually has storage, and whether
  * an uncredited Lumo account is theirs.
  *
@@ -45,8 +45,8 @@ export function HeldRowFixer({
           Add their address and we will do the rest
         </p>
         <p className="mt-1 text-[14px] text-ink-soft">
-          Worth £{REWARD_GBP}. As soon as you give us an address, {row.customer.firstName}{' '}
-          joins the send queue — you do not need to write anything or tell us you have.
+          Worth £{REWARD_GBP}. Give us an address and {row.customer.firstName} joins the
+          send queue.
         </p>
         <div className="mt-3">
           <Field
@@ -74,9 +74,8 @@ export function HeldRowFixer({
         Does {row.customer.firstName} have a battery?
       </p>
       <p className="mt-1 text-[14px] text-ink-soft">
-        Your list did not say. Worth £{REWARD_GBP} if they do. If they only have solar,
-        telling us now keeps them out of the send — solar-only customers generate the spam
-        complaints that slow everyone else down.
+        Your list did not say. Worth £{REWARD_GBP} if they do. Solar only? Telling us keeps
+        them out of the send, which protects delivery for the rest.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button
@@ -110,10 +109,9 @@ export function UnmatchedFixer({ row, onDone }: { row: CustomerRow; onDone: () =
         £{REWARD_GBP} is not being credited to you
       </p>
       <p className="mt-1 text-[14px] text-dead-fg/90">
-        {displayName(row.customer)} is on Lumo with control running, but they signed up on
-        their own rather than through your campaign. Confirm they are your customer and we
-        will tie the account to you. Do not re-add them — that makes a duplicate and delays
-        it further.
+        {displayName(row.customer)} is on Lumo and running, but signed up on their own
+        rather than through your campaign. Confirm they are yours and we will tie the
+        account to you. Do not re-add them, that just makes a duplicate.
       </p>
       <div className="mt-3">
         <Button

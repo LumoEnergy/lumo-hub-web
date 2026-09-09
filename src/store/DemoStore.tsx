@@ -1,13 +1,13 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { HubCustomer, MaterialisedPersona, PersonaId } from '../fixtures';
+import type { HubCustomer, HubSeat, MaterialisedPersona, PersonaId } from '../fixtures';
 import { loadPersona } from '../fixtures';
 
 /**
  * In-memory demo state.
  *
  * Nothing here persists and nothing leaves the tab. That is the point: the store
- * exists so the demo feels alive — approve the campaign and the list starts moving —
+ * exists so the demo feels alive, approve the campaign and the list starts moving,
  * while remaining incapable of sending an email or writing anywhere.
  *
  * There is no localStorage either. A research session should start from a known
@@ -48,12 +48,20 @@ interface DemoStore {
   addCustomers: (drafts: readonly CustomerDraft[]) => readonly string[];
   /**
    * Handing over another list. It lands as `processing` with no outcome counts,
-   * because that is what actually happens — the work is asynchronous and the demo
+   * because that is what actually happens, the work is asynchronous and the demo
    * should not pretend a file is parsed by the time the button springs back.
    */
   addFile: (filename: string, rows: number) => void;
   /** Changing the daily send cap, which rebuilds the remaining batches. */
   setDailyCap: (cap: number) => void;
+  /**
+   * Rewriting the campaign email. Subject and paragraphs only: the footer carries
+   * the unsubscribe and the "on behalf of" disclosure, and neither is negotiable.
+   */
+  editEmail: (subject: string, body: readonly string[]) => void;
+  /** Inviting a colleague. Roles are Admin or Viewer, and nothing else. */
+  inviteSeat: (name: string, email: string, role: HubSeat['role']) => void;
+  removeSeat: (id: string) => void;
   reset: () => void;
 }
 
@@ -258,6 +266,48 @@ export function DemoStoreProvider({
     [asOf],
   );
 
+  const editEmail = useCallback((subject: string, body: readonly string[]) => {
+    setCompany((current) => ({
+      ...current,
+      campaignEmail: {
+        ...current.campaignEmail,
+        subject: subject.trim(),
+        // Empty paragraphs are dropped rather than sent as blank space. Somebody
+        // deleting a paragraph they do not want is the commonest edit there is.
+        body: body.map((p) => p.trim()).filter((p) => p !== ''),
+      },
+    }));
+    setDirty(true);
+  }, []);
+
+  const inviteSeat = useCallback((name: string, email: string, role: HubSeat['role']) => {
+    setCompany((current) => ({
+      ...current,
+      seats: [
+        ...current.seats,
+        {
+          id: `seat-${current.seats.length + 1}`,
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          role,
+          isCurrentUser: false,
+          status: 'invited',
+        },
+      ],
+    }));
+    setDirty(true);
+  }, []);
+
+  const removeSeat = useCallback((id: string) => {
+    // Removing yourself would leave the demo with nobody to attribute an approval
+    // to, and on a real account it is how a firm locks itself out.
+    setCompany((current) => ({
+      ...current,
+      seats: current.seats.filter((seat) => seat.id !== id || seat.isCurrentUser),
+    }));
+    setDirty(true);
+  }, []);
+
   const reset = useCallback(() => {
     const fresh = loadPersona(personaId, new Date());
     setCustomers(fresh.customers);
@@ -281,6 +331,9 @@ export function DemoStoreProvider({
       addCustomers,
       addFile,
       setDailyCap,
+      editEmail,
+      inviteSeat,
+      removeSeat,
       reset,
     }),
     [
@@ -298,6 +351,9 @@ export function DemoStoreProvider({
       addCustomers,
       addFile,
       setDailyCap,
+      editEmail,
+      inviteSeat,
+      removeSeat,
       reset,
     ],
   );

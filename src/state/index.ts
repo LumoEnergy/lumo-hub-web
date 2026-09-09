@@ -2,7 +2,7 @@
  * The state model.
  *
  * Four independent tracks. A household sits in one state on each at all times, and
- * the job of the UI is to make their combination legible — which is why the tracks
+ * the job of the UI is to make their combination legible, which is why the tracks
  * are defined separately here rather than flattened into a single funnel that would
  * have to invent states for every combination.
  */
@@ -37,6 +37,7 @@ export {
   EARNINGS,
   EARNINGS_STATE_IDS,
   REWARD_GBP,
+  GRID_REWARD_GBP,
   QUALIFYING_DAYS,
   earningsState,
   deriveEarningsState,

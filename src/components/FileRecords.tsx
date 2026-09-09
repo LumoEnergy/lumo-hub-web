@@ -68,19 +68,19 @@ function FileRow({ batch }: { batch: ImportBatch }) {
       <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Figure value={batch.rowsSupplied} label="You sent" />
         <Figure value={batch.rowsLoaded} label="We loaded" tone="accent" />
-        <Figure value={batch.rowsHeld} label="Held back" tone="warn" />
-        <Figure value={batch.rowsRejected} label="Could not use" />
+        <Figure value={batch.rowsHeld} label="Need you" tone="warn" />
+        <Figure value={batch.rowsRejected} label="Duplicates" />
       </div>
 
+      {/* The unusable rows keep their number and lose their explanation. It said
+          "thirty-two rows were exact duplicates of another row in the same file, same
+          name and same address", which is a sentence about our de-duplication rather
+          than about their business, and it was the wordiest thing on the screen. The
+          detail belongs in the email we send when a file finishes, not here. */}
       {processing ? (
         <p className="mt-2.5 text-[13px] text-ink-soft">
-          We are matching these against existing Lumo accounts and checking for households
-          already on another of your lists. We will email {batch.suppliedBy} when it is done —
-          usually within a few hours. Nothing is sent until you have seen the result.
-        </p>
-      ) : batch.rejectedReason ? (
-        <p className="mt-2.5 text-[13px] text-ink-soft">
-          <span className="font-semibold text-ink">Could not use:</span> {batch.rejectedReason}
+          Matching against existing Lumo accounts. We will email {batch.suppliedBy} in a few
+          hours. Nothing sends until you have seen it.
         </p>
       ) : null}
     </>
@@ -128,7 +128,7 @@ function Figure({
  * send us whatever comes out of your system" converts better than any upload UI, and
  * it is how we keep seeing what real exports look like.
  *
- * No column mapping, no header matching, no preview grid. Lumo does that work — that
+ * No column mapping, no header matching, no preview grid. Lumo does that work, that
  * is the entire promise, and an upload screen that makes them tidy their own CSV
  * would break it while looking like a feature.
  */
@@ -159,14 +159,11 @@ function UploadControl({ onUpload }: { onUpload: (filename: string, rows: number
           Add another list
         </Button>
         <p className="text-[13px] text-ink-mute">
-          Or email it to{' '}
-          <span className="font-semibold text-ink">partners@lumo.energy</span> in whatever
-          shape it comes out of your system.
+          Or email it to <span className="font-semibold text-ink">partners@lumo.energy</span>.
         </p>
       </div>
       <p className="mt-2 max-w-[62ch] text-[13px] text-ink-mute">
-        A CSV or spreadsheet, columns in any order, nobody needs to tidy it. We process it and
-        tell you what we could and could not use. Nothing sends without the schedule below.
+        Any shape, columns in any order. We tidy it and tell you what we found.
       </p>
       {added ? (
         <p className="mt-2 text-[13px] font-semibold text-accent">

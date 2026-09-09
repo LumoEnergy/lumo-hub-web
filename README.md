@@ -13,9 +13,9 @@ a deliberate act rather than a drift.
 Everything in `src/components/` is disposable. Two things are not, and are written as
 production code:
 
-- **`src/state/`** — the state definitions, permitted transitions, ownership and copy.
+- **`src/state/`**, the state definitions, permitted transitions, ownership and copy.
   This is intended to survive into the real product largely unchanged.
-- **`src/fixtures/`** — the typed personas. The view model they are shaped as is the data
+- **`src/fixtures/`**, the typed personas. The view model they are shaped as is the data
   contract the real build gets constructed against.
 
 `docs/state-model.md` is **generated** from `src/state/` by `npm run state-table`. Do not
@@ -26,15 +26,15 @@ state added or removed always shows up as a reviewable diff.
 
 Persona selection is URL-encoded so a specific scenario can be shared as a link.
 
-- `?p=established` (default) — a 20-plus customer portfolio, mostly earning, two live
+- `?p=established` (default), a 20-plus customer portfolio, mostly earning, two live
   blockers. The investor and internal demo.
-- `?p=first-run` — zero customers. Tests whether the empty product still explains itself.
-- `?p=messy` — eight invited, five stuck at different stages, one email that never matched,
+- `?p=first-run`, zero customers. Tests whether the empty product still explains itself.
+- `?p=messy`, eight invited, five stuck at different stages, one email that never matched,
   one confirmed £50. The research conversation.
 
 Research fidelity wins where the two audiences conflict. The aspirational demo path is a
 subset of a complete state model, so you can always demo the good story by choosing a
-flattering persona — but you cannot run credible research from a happy-path-only model.
+flattering persona, but you cannot run credible research from a happy-path-only model.
 
 Interaction state lives in memory, so adding a customer makes it appear in the list. The
 shell carries a visible reset.
@@ -43,9 +43,9 @@ shell carries a visible reset.
 
 Both were settled in scoping and are expressed in `src/state/earnings.ts`:
 
-- **Qualification** — £50 per household, on 30 **consecutive** days in `Smart Control
+- **Qualification**, £50 per household, on 30 **consecutive** days in `Smart Control
   Active` measured from first activation. Any drop resets the clock.
-- **Clawback** — confirmed is final. Once the 30 days are served the £50 is not reversed,
+- **Clawback**, confirmed is final. Once the 30 days are served the £50 is not reversed,
   even if control later drops. The installer cannot control a household unlinking six
   months later.
 

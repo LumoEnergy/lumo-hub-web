@@ -5,7 +5,7 @@ import { useParams } from 'react-router-dom';
  *
  * It exists so that anyone following the link during a research session gets a page
  * instead of a 404. In the real product this is the consumer signup, carrying the
- * firm's token — which is exactly the producer that does not exist today: attribution
+ * firm's token, which is exactly the producer that does not exist today: attribution
  * is currently a free-text `?partner=` string the customer can edit for themselves.
  *
  * Deliberately does NOT imitate the consumer signup. A convincing fake signup in a

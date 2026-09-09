@@ -1,12 +1,12 @@
 import type { StateDefinition, StateTrack } from './types';
 
 /**
- * Contact state — what happened to the campaign email Lumo sends to the installer's
+ * Contact state, what happened to the campaign email Lumo sends to the installer's
  * back-book.
  *
  * THIS TRACK REPLACED AN EARLIER "INVITE" TRACK, AND THE REASON MATTERS. That track
  * modelled an installer adding households one at a time and choosing, per household,
- * whether Lumo or they made contact. It was wrong — not in its data shape but in what
+ * whether Lumo or they made contact. It was wrong, not in its data shape but in what
  * it asked of the installer. A firm with three hundred past battery installations
  * will never sit in an unfamiliar tool adding them individually, and asking them to
  * write and send the email themselves and then record that they had done so is asking
@@ -142,7 +142,7 @@ const STATES: Record<ContactStateId, StateDefinition<ContactStateId>> = {
     id: 'bounced',
     label: 'Email bounced',
     blocker:
-      'The address on your list is dead, so they never saw it. Common on a back-book — people change provider and move house.',
+      'The address on your list is dead, so they never saw it. Common on a back-book, people change provider and move house.',
     owner: 'installer',
     action:
       'A better address puts them straight back in the queue. Bounces also hurt our sending reputation, so this one helps the rest of your list too.',
@@ -153,8 +153,8 @@ const STATES: Record<ContactStateId, StateDefinition<ContactStateId>> = {
    *
    * A firm can act on a non-responder: a call from the company that fitted the
    * battery is the only thing left that would work. But this is the largest state in
-   * any back-book campaign by a wide margin — around a hundred rows out of two
-   * hundred — and a per-row task repeated a hundred times is not a queue, it is
+   * any back-book campaign by a wide margin, around a hundred rows out of two
+   * hundred, and a per-row task repeated a hundred times is not a queue, it is
    * wallpaper. It would bury the thirty-odd rows that genuinely need one specific
    * thing doing.
    *
@@ -167,7 +167,7 @@ const STATES: Record<ContactStateId, StateDefinition<ContactStateId>> = {
     id: 'no_response',
     label: 'No response',
     blocker:
-      'Delivered and never opened. Lumo will not email these again — repeatedly mailing people who ignore us is how a sending domain dies, and it would take the rest of your list down with it.',
+      'Delivered and never opened. Lumo will not email these again, repeatedly mailing people who ignore us is how a sending domain dies, and it would take the rest of your list down with it.',
     owner: 'nobody',
     action: null,
     disposition: 'blocked',
@@ -207,7 +207,7 @@ const TRANSITIONS: Record<ContactStateId, readonly ContactStateId[]> = {
   opened: ['clicked', 'signed_up', 'no_response', 'unsubscribed', 'complained'],
   clicked: ['signed_up', 'no_response', 'unsubscribed'],
   signed_up: [],
-  // A corrected address goes back to the send queue, not back for re-approval —
+  // A corrected address goes back to the send queue, not back for re-approval,
   // the installer signed off the email, not each recipient.
   bounced: ['queued', 'held_no_email'],
   no_response: ['signed_up', 'unsubscribed'],
@@ -251,7 +251,7 @@ export const HELD_STATES: readonly ContactStateId[] = ['held_no_email', 'held_un
  *
  * THIS USED TO INCLUDE THE HELD STATES AND BOUNCES, AND THAT WAS A CONFLATION. The
  * reasoning was that fifty missing addresses is a batch job rather than fifty
- * decisions — true of the old owner-grouped queue, which rendered a card and an
+ * decisions, true of the old owner-grouped queue, which rendered a card and an
  * instruction per row. It is not true of a sortable table, where fifty rows each
  * showing "email address missing" is precisely the right affordance: you filter,
  * you work down it, and every one needs a DIFFERENT address that only the firm has.

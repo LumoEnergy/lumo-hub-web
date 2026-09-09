@@ -1,13 +1,13 @@
 import type { HubCustomer } from '../fixtures';
 import { displayName } from '../fixtures';
 import type { ContactStateId, ResolvedState } from '../state';
-import { LIST_LEVEL_STATES, REWARD_GBP, resolveCustomerState } from '../state';
+import { REWARD_GBP, resolveCustomerState } from '../state';
 
 /**
  * What each screen needs, derived from the fixtures and the state model.
  *
- * Kept out of the components so the ordering and grouping rules — which are product
- * decisions worth arguing about in a review — are readable in one place and testable
+ * Kept out of the components so the ordering and grouping rules, which are product
+ * decisions worth arguing about in a review, are readable in one place and testable
  * without rendering anything.
  */
 
@@ -36,109 +36,6 @@ export function buildRows(
     ),
   }));
 }
-
-/**
- * Does this row need the firm, as an individual piece of work?
- *
- * THE ONE PREDICATE, used by the `Needs you` filter and by the dashboard count that
- * links to it. The first version of each computed its own answer, and they disagreed:
- * the filter used plain `resolved.needsAttention`, which counts every one of
- * Kestrel's 118 rows awaiting the same single sign-off, so the dashboard promised 152
- * households of work behind a link to a list of 34.
- *
- * Two exclusions, for two different reasons. Match blockers are pinned above the
- * list as a money callout, because a row that looks like every other row has already
- * failed at the one job that matters. List-level states are one action covering the
- * whole list — see `LIST_LEVEL_STATES`.
- */
-export const needsYouIndividually = (row: CustomerRow): boolean =>
-  row.resolved.needsAttention &&
-  row.resolved.track !== 'match' &&
-  !(LIST_LEVEL_STATES as readonly string[]).includes(row.customer.contact);
-
-/** Households on Lumo whose credit is going nowhere. Pinned above the list. */
-export function unmatchedRows(rows: readonly CustomerRow[]): readonly CustomerRow[] {
-  return rows
-    .filter((row) => row.resolved.track === 'match')
-    .sort((a, b) => b.resolved.ageDays - a.resolved.ageDays);
-}
-
-/**
- * The three defects the firm is the only possible source of a fix for.
- *
- * Each of these still appears as its own row in the table — a different address is
- * needed for each one, so the household really is the unit of work. What this adds
- * is the argument for spending an afternoon on them, stated once above the rows
- * rather than repeated on every one of them.
- *
- * NO MULTIPLIED TOTAL, DELIBERATELY. An earlier version of this said "28 households
- * missing an address — that is £1,400 we cannot go after". It reads well and it is
- * a lie: it assumes every one of the 28 would sign up and stay connected for 30 days,
- * when a realistic back-book conversion is a fraction of that. Presenting the
- * theoretical maximum as money being lost is precisely the growth fantasy the
- * September review called out, and doing it to installers who have not been paid yet
- * is how the last version of this product lost the room.
- *
- * So the rate is quoted per household — £50 each, which is true — and the count is
- * left as a count. `unmatchedRows` is the one place a multiplied total IS honest,
- * because that money has already been earned.
- */
-type DataQualityState = 'held_no_email' | 'held_unconfirmed' | 'bounced';
-
-const DATA_QUALITY_STATES: readonly DataQualityState[] = [
-  'held_no_email',
-  'held_unconfirmed',
-  'bounced',
-];
-
-export interface DataQualityGroup {
-  readonly contact: DataQualityState;
-  readonly label: string;
-  /** Why it is worth their time. Quotes the per-household rate, never a total. */
-  readonly argument: string;
-  readonly rows: readonly CustomerRow[];
-}
-
-export function dataQualityGroups(rows: readonly CustomerRow[]): readonly DataQualityGroup[] {
-  const copy: Record<DataQualityState, { label: string; argument: (n: number) => string }> = {
-    held_no_email: {
-      label: 'Missing an email address',
-      argument: (n) =>
-        `Your list had no usable address for ${n === 1 ? 'this household' : `these ${n}`}, so there is nobody for us to write to. You are the only place an address can come from, and each one that signs up and stays connected for 30 days is £${REWARD_GBP}.`,
-    },
-    held_unconfirmed: {
-      label: 'Battery not confirmed',
-      argument: (n) =>
-        `We cannot tell from your list whether ${n === 1 ? 'this household has' : `these ${n} have`} storage. You are the only one who knows. Sending to solar-only customers wastes the send and risks the spam complaints that slow the rest of your list down.`,
-    },
-    bounced: {
-      label: 'Email bounced',
-      argument: (n) =>
-        `${n === 1 ? 'One address was' : `${n} addresses were`} dead, so they never saw it. Routine on a book this old. A better address puts them straight back in the queue, and fixing bounces protects delivery for everyone else on your list.`,
-    },
-  };
-
-  return DATA_QUALITY_STATES.map((contact) => {
-    const group = rows.filter((row) => row.customer.contact === contact);
-    return {
-      contact,
-      label: copy[contact].label,
-      argument: copy[contact].argument(group.length),
-      rows: [...group].sort((a, b) => b.resolved.ageDays - a.resolved.ageDays),
-    };
-  }).filter((group) => group.rows.length > 0);
-}
-
-/**
- * How many households need the firm one at a time.
- *
- * Deliberately the same predicate as the `Needs you` filter. The dashboard links
- * straight through to that filter, so a count here that does not match the number of
- * rows there is not a rounding difference — it is the screen contradicting itself
- * one click apart.
- */
-export const needsAttentionCount = (rows: readonly CustomerRow[]): number =>
-  rows.filter(needsYouIndividually).length;
 
 export const earningCount = (rows: readonly CustomerRow[]): number =>
   rows.filter((row) => row.customer.activation === 'Smart Control Active').length;
@@ -226,56 +123,47 @@ export function earningsSummary(rows: readonly CustomerRow[]): EarningsSummary {
  * Table sorting, desktop only.
  *
  * `priority` is the default and is the only one that is a product opinion rather than
- * a mechanical sort: rows needing the firm come first, then everything else, each
- * oldest-first. Someone who clicks a column header has a specific question and gets a
- * literal answer; someone who has just landed gets the useful order.
+ * a mechanical sort. It runs the list backwards down the funnel: live households
+ * first, then signed up, then the clicks, and so on down to the ones we have not
+ * written to yet.
+ *
+ * THAT IS A CHANGE OF MIND. It used to put the firm's chores at the top, on the
+ * theory that a queue is more useful than a scoreboard. It is, but not here: the
+ * chores now have their own tab, and a default view that opens on twenty-six
+ * identical "No email address" rows makes a working campaign look like a mess. Down
+ * the funnel is also the only order in which the list reads as the same story the
+ * dashboard just told.
  */
 export type SortKey = 'priority' | 'household' | 'status' | 'age' | 'money';
 export type SortDirection = 'asc' | 'desc';
 
 /**
- * The filters above the list.
+ * How far down the funnel a household has got. Higher is further.
  *
- * Four, because a filter nobody uses is worse than no filter: it is another decision
- * on a screen whose job is to be scannable. Each of these answers a question a firm
- * actually arrives with — is anything waiting on me, who is making me money, who has
- * not heard from us yet, and let me see the lot.
- *
- * `attention` is where the old landing-page queue went. It is the same set of rows,
- * reachable in one click from the dashboard, and no longer the first thing anyone
- * sees when they log in.
+ * The opted-out and gone-quiet states sit below "not emailed yet" on purpose: they
+ * are further through the campaign but they are over, and sorting them above live
+ * prospects would fill the top of a reversed list with dead ends.
  */
-export type CustomerFilter = 'all' | 'attention' | 'earning' | 'not_emailed';
+const JOURNEY_RANK: Record<ContactStateId, number> = {
+  signed_up: 8,
+  clicked: 7,
+  opened: 6,
+  sent: 5,
+  bounced: 4,
+  held_no_email: 3,
+  held_unconfirmed: 3,
+  queued: 2,
+  imported: 2,
+  awaiting_approval: 2,
+  no_response: 1,
+  unsubscribed: 0,
+  complained: 0,
+};
 
-export const CUSTOMER_FILTERS: readonly { id: CustomerFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'attention', label: 'Needs you' },
-  { id: 'earning', label: 'Earning' },
-  { id: 'not_emailed', label: 'Not emailed yet' },
-];
-
-export function filterRows(
-  rows: readonly CustomerRow[],
-  filter: CustomerFilter,
-): readonly CustomerRow[] {
-  switch (filter) {
-    case 'attention':
-      return rows.filter(needsYouIndividually);
-    case 'earning':
-      return rows.filter((row) => row.customer.activation === 'Smart Control Active');
-    case 'not_emailed':
-      return rows.filter((row) =>
-        ['imported', 'awaiting_approval', 'queued', 'held_no_email', 'held_unconfirmed'].includes(
-          row.customer.contact,
-        ),
-      );
-    default:
-      return rows;
-  }
-}
-
-export const isCustomerFilter = (value: string | null): value is CustomerFilter =>
-  value !== null && CUSTOMER_FILTERS.some((f) => f.id === value);
+/** Live control outranks a bare sign-up: it is the only state that pays. */
+const journeyRank = (row: CustomerRow): number =>
+  JOURNEY_RANK[row.customer.contact] +
+  (row.customer.activation === 'Smart Control Active' ? 1 : 0);
 
 const MONEY_RANK: Record<MoneyPosition, number> = {
   paid: 5,
@@ -297,7 +185,7 @@ export function sortRows(
    * Every key falls through to the row id, and the sign multiplies the tiebreak too.
    *
    * Without this, two households called Marion Dunlop sort by whichever the import
-   * happened to put first, so reversing the column does not reverse the list — rows
+   * happened to put first, so reversing the column does not reverse the list, rows
    * appear to shuffle. Duplicate names are normal in a two-hundred-row back book,
    * not an edge case.
    */
@@ -305,32 +193,15 @@ export function sortRows(
     const tie = a.customer.id.localeCompare(b.customer.id);
 
     switch (key) {
-      case 'priority': {
-        const rank = (row: CustomerRow) => {
-          if (row.resolved.track === 'match') return 4;
-          if (!needsYouIndividually(row)) return 0;
-          // A WARM LEAD OUTRANKS AN ADMIN JOB, and the two are not the same kind of
-          // work. Somebody who clicked through and stopped is a phone call worth
-          // making today; a missing address is an afternoon of data entry, and there
-          // are usually dozens of them. Ranking purely by age put 26 identical "No
-          // email address" rows at the top of the default view, which is wallpaper —
-          // it buried the fourteen people who had actually shown interest and made
-          // the whole list look like a chore.
-          return DATA_QUALITY_STATES.includes(row.customer.contact as DataQualityState)
-            ? 1
-            : row.customer.contact === 'clicked'
-              ? 3
-              : 2;
-        };
-        return rank(b) - rank(a) || b.resolved.ageDays - a.resolved.ageDays || tie;
-      }
+      case 'priority':
+        return journeyRank(b) - journeyRank(a) || b.resolved.ageDays - a.resolved.ageDays || tie;
       case 'household':
         return (displayName(a.customer).localeCompare(displayName(b.customer)) || tie) * sign;
       case 'status':
-        return (
-          ((a.resolved.state?.label ?? '').localeCompare(b.resolved.state?.label ?? '') || tie) *
-          sign
-        );
+        // Sorted by position in the funnel, not alphabetically by label. Nobody
+        // wants "Clicked through" next to "Battery unconfirmed" because both start
+        // with a letter near the front.
+        return (journeyRank(a) - journeyRank(b) || tie) * sign;
       case 'age':
         return (a.resolved.ageDays - b.resolved.ageDays || tie) * sign;
       case 'money':

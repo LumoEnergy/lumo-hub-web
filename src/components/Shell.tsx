@@ -14,7 +14,7 @@ import { currentSeat } from '../fixtures';
  * THE ACCOUNT IS THE COMPANY. The firm's name is the largest text in the sidebar and
  * the current person is secondary to it, because Lumo's customer is the firm and the
  * money is owed to the firm. There is deliberately no personal link and no personal
- * QR anywhere in this product — the previous version had both, and they encoded an
+ * QR anywhere in this product, the previous version had both, and they encoded an
  * attribution model that cannot be paid.
  */
 
@@ -41,10 +41,25 @@ export function Shell() {
       {/* Desktop sidebar. Hidden below lg, where the tab bar takes over. */}
       <aside className="hidden lg:flex lg:h-dvh lg:w-[240px] lg:shrink-0 lg:flex-col lg:justify-between lg:border-r lg:border-line lg:bg-surface lg:px-4 lg:py-5 lg:sticky lg:top-0">
         <div>
-          <div className="px-2 pb-6">
-            <p className="text-[17px] font-bold leading-tight text-ink">{company.name}</p>
-            <p className="mt-0.5 text-[13px] text-ink-mute">{seat.name}</p>
-          </div>
+          {/* The identity block is the way into account settings, which is where
+              people look for it. A fourth main tab would put team admin at the same
+              weight as the campaign, and it is not. */}
+          <NavLink
+            to="settings"
+            className={({ isActive }) =>
+              [
+                'mb-6 block rounded-card px-2 py-1.5 transition-colors duration-150',
+                isActive ? 'bg-accent-soft' : 'hover:bg-sunk',
+              ].join(' ')
+            }
+          >
+            <span className="block text-[17px] font-bold leading-tight text-ink">
+              {company.name}
+            </span>
+            <span className="mt-0.5 block text-[13px] text-ink-mute">
+              {seat.name} · Account
+            </span>
+          </NavLink>
           {/* Both navs are always in the DOM and CSS picks one, which is the right
               trade for a responsive layout but does leave a screen reader with two
               sets of the same links. Distinct labels are what make that navigable. */}
@@ -79,7 +94,18 @@ export function Shell() {
       {/* Mobile app bar. */}
       <header className="sticky top-0 z-30 flex h-[52px] shrink-0 items-center justify-between border-b border-line bg-surface/95 px-4 backdrop-blur lg:hidden">
         <p className="truncate text-[16px] font-bold text-ink">{company.name}</p>
-        <p className="ml-3 shrink-0 text-[13px] text-ink-mute">{seat.name}</p>
+        <NavLink
+          to="settings"
+          className={({ isActive }) =>
+            [
+              'ml-3 flex shrink-0 items-center gap-1.5 rounded-chip px-2 py-1 text-[13px]',
+              isActive ? 'bg-accent-soft text-accent' : 'text-ink-mute',
+            ].join(' ')
+          }
+        >
+          {seat.name}
+          <GearIcon />
+        </NavLink>
       </header>
 
       <main className="flex-1 pb-[calc(56px+max(0.5rem,env(safe-area-inset-bottom)))] lg:pb-0">
@@ -122,7 +148,7 @@ export function Shell() {
 
 /**
  * The reset. Quiet until something has actually changed, then it says what it will
- * undo — a research session that has drifted needs a visible way back to a known
+ * undo, a research session that has drifted needs a visible way back to a known
  * starting point.
  */
 function ResetControl({
@@ -147,8 +173,22 @@ function ResetControl({
   );
 }
 
-/* Line icons, 20px, inherit colour. Inline because there are three of them and a
+/* Line icons, inherit colour. Inline because there are four of them and a
    dependency would be heavier than the markup. */
+
+function GearIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <circle cx="10" cy="10" r="2.6" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M15.3 4.7l-1.4 1.4M6.1 13.9l-1.4 1.4"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 function ListIcon() {
   return (

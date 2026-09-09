@@ -9,14 +9,14 @@ import { Button, Field } from './ui';
  *
  * WHY THIS IS A FEATURE AND NOT A SETTING. Eight hundred emails leaving a young
  * sending domain at once is the fastest way to get every future campaign filtered,
- * for this firm and — at the shared rung — for every other firm on the domain. The
+ * for this firm and, at the shared rung, for every other firm on the domain. The
  * throttle is not a nicety, it is what keeps the channel alive. Saying so out loud
  * turns "why is this taking a fortnight" into "good, they know what they are doing",
  * which is the difference between the schedule reassuring an installer and annoying
  * one.
  *
  * DATES ARE A LIE BEFORE SIGN-OFF. Nothing sends until the email is approved, so an
- * unapproved campaign shows the shape — day 1, day 2, day 3 — rather than dates that
+ * unapproved campaign shows the shape, day 1, day 2, day 3, rather than dates that
  * will be wrong the moment they take a day to read it.
  */
 const dayLabel = (date: string, index: number, awaitingApproval: boolean): string => {
@@ -95,7 +95,7 @@ export function SendSchedule({
  * The one lever worth giving them, because the reasons to move it are real and
  * specific: one engineer who wants to field the replies personally, a fortnight when
  * the firm is short-handed, or a book so old they would rather test the water with a
- * hundred before committing the rest. The upper bound is not arbitrary politeness —
+ * hundred before committing the rest. The upper bound is not arbitrary politeness,
  * it is the point past which a shared sending domain starts getting filtered.
  */
 function CapControl({
@@ -132,9 +132,8 @@ function CapControl({
         </Button>
       </div>
       <p className="mt-2 max-w-[62ch] text-[13px] text-ink-mute">
-        Between 10 and 500. We start low on purpose: a few hundred emails arriving in one
-        minute is what makes inbox providers treat the rest of your list as spam, and the
-        damage is not limited to the batch that caused it.
+        Between 10 and 500. We keep it low on purpose: send too many at once and inbox
+        providers start treating the rest of your list as spam.
       </p>
     </div>
   );

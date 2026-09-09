@@ -10,16 +10,16 @@ import type { StateDefinition, StateTrack } from './types';
  * SOURCE OF TRUTH, in priority order:
  *   1. `compute_account_state()` in
  *      `lumo-app-web/functions/utils/hubspot_payloads.py`
- *      — the derivation, including the precedence recorded below.
+ *     , the derivation, including the precedence recorded below.
  *   2. The `lumo_app_account_state` picklist in
  *      `lumo-app-web/scripts/create_hubspot_fields.py`
- *      — the exact strings, including the comma in "Linked, No Tariff".
+ *     , the exact strings, including the comma in "Linked, No Tariff".
  *
  * If `activation.test.ts` fails, reconcile against the Python. Do NOT edit the
  * expectation to match this file: the whole value of the module is that it cannot
  * silently drift from what the platform actually produces.
  *
- * The eleventh value, `no_account`, is Hub-only and has no producer today — see
+ * The eleventh value, `no_account`, is Hub-only and has no producer today, see
  * `producerGaps.ts`.
  */
 
@@ -63,7 +63,7 @@ interface ActivationDefinition extends StateDefinition<ActivationStateId> {
   /**
    * Order in which `compute_account_state()` decides. Lower wins. `Device
    * Disconnected` and `Needs Relink` are checked before the five-state app-state
-   * derivation and therefore shadow everything below them — a household can be
+   * derivation and therefore shadow everything below them, a household can be
    * mid-way through setup AND offline, and the platform will report offline.
    *
    * `no_account` is 0 because it precedes the platform having an opinion at all.
@@ -204,7 +204,7 @@ const STATES: Record<ActivationStateId, ActivationDefinition> = {
     blocker:
       "Connected and tariff set, but they have never turned Smart Control on, so it has never been tested.",
     owner: 'household',
-    action: "One toggle in the app. Worth a call — they are one tap from earning.",
+    action: "One toggle in the app. Worth a call, they are one tap from earning.",
     disposition: 'blocked',
     precedence: 9,
     countsTowardQualification: false,

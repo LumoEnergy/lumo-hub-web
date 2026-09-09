@@ -4,7 +4,7 @@
  *
  * This exists because of a specific failure: `base` in vite.config.ts rewrites the
  * URLs inside index.html but does not nest the output directory. The bundle landed at
- * dist/assets/… , the HTML asked for /d/<base>/assets/… , the SPA catch-all rewrite
+ * dist/assets/... , the HTML asked for /d/<base>/assets/... , the SPA catch-all rewrite
  * answered with index.html and a text/html content type, the module failed to parse,
  * and every screen was blank.
  *
@@ -26,7 +26,7 @@ const DIST = join(ROOT, 'dist');
 const problems = [];
 const fail = (message) => problems.push(message);
 
-/** DEMO_BASE, read as text — this is plain Node and cannot import a .ts module. */
+/** DEMO_BASE, read as text, this is plain Node and cannot import a .ts module. */
 const baseModule = readFileSync(join(ROOT, 'src/demoBase.ts'), 'utf8');
 const baseMatch = baseModule.match(/export const DEMO_BASE = '([^']+)'/);
 if (!baseMatch) {

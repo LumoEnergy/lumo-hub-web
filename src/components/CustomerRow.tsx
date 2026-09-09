@@ -9,25 +9,36 @@ import {
 } from '../state';
 import type { CustomerRow as Row } from '../selectors/customers';
 import { moneyPosition } from '../selectors/customers';
+import { actionFor, statusClass, statusFor } from '../selectors/status';
+import type { ViewId } from '../selectors/views';
 import { AgeChip, Missing, MoneyChip } from './ui';
 
 /**
- * One household, one line of why it matters.
+ * One household on a phone.
  *
- * A household is in a state on all four tracks at once. Showing four badges moves
- * the work onto the installer, so the row shows the single nominated blocker and the
- * detail shows everything. The age chip is the only coloured element, because age is
- * the dimension that decides whether this is a call today or a lost cause — and it
- * goes neutral when nobody can act, so the silent majority of a campaign does not
- * paint the list orange for something nobody did wrong.
+ * A household is in a state on all four tracks at once, and the row shows one:
+ * where the campaign has got to, in the same words and the same colour the funnel
+ * and the desktop table use. The detail panel carries the rest.
+ *
+ * On Needs you it also carries the instruction, because a phone is exactly where
+ * somebody works through a call list and the status alone does not say what to do.
  */
 
 /** True when age should render neutral: nothing anyone does changes this row. */
 const ageIsMoot = (row: Row) => row.resolved.owner === 'nobody';
 
-export function CustomerCard({ row, onOpen }: { row: Row; onOpen: (row: Row) => void }) {
+export function CustomerCard({
+  row,
+  onOpen,
+  view,
+}: {
+  row: Row;
+  onOpen: (row: Row) => void;
+  view?: ViewId;
+}) {
   const { customer, resolved } = row;
   const position = moneyPosition(row);
+  const status = statusFor(row);
 
   return (
     <li>
@@ -39,9 +50,17 @@ export function CustomerCard({ row, onOpen }: { row: Row; onOpen: (row: Row) => 
           <span className="block truncate text-[16px] font-semibold text-ink">
             {displayName(customer)}
           </span>
-          <span className="block truncate text-[14px] text-ink-soft">
-            {resolved.state ? resolved.state.label : 'Earning'}
+          <span
+            className={[
+              'mt-1 inline-block rounded-chip px-2 py-0.5 text-[12px] font-semibold',
+              statusClass(status.tone),
+            ].join(' ')}
+          >
+            {status.label}
           </span>
+          {view === 'attention' ? (
+            <span className="mt-1 block truncate text-[13px] text-ink-soft">{actionFor(row)}</span>
+          ) : null}
         </span>
 
         {position === 'pending' ? (
@@ -63,8 +82,8 @@ export function CustomerCard({ row, onOpen }: { row: Row; onOpen: (row: Row) => 
 /**
  * The detail. All four tracks, spelled out, because this is the only place the full
  * position is available and hiding it would make the row's single-state summary feel
- * like a guess. It also carries the audit fields — who supplied this household and on
- * which import — which is the firm's own management data rather than Lumo's.
+ * like a guess. It also carries the audit fields, who supplied this household and on
+ * which import, which is the firm's own management data rather than Lumo's.
  */
 export function CustomerDetail({ row }: { row: Row }) {
   const { customer, resolved } = row;
@@ -77,7 +96,7 @@ export function CustomerDetail({ row }: { row: Row }) {
           <p className="text-[13px] font-semibold text-ink-soft">What is holding this up</p>
           <p className="mt-1 text-[15px] text-ink">{resolved.state.blocker}</p>
           <p className="mt-3 text-[13px] font-semibold text-ink-soft">
-            Whose job — {OWNER_LABELS[resolved.owner]}
+            Down to {OWNER_LABELS[resolved.owner].toLowerCase()}
           </p>
           {resolved.state.action ? (
             <p className="mt-1 text-[15px] text-ink">{resolved.state.action}</p>
@@ -124,8 +143,7 @@ function MoneyLine({ row, position }: { row: Row; position: ReturnType<typeof mo
     return (
       <p className="rounded-card border border-dead-fg/25 bg-dead-bg p-3 text-[15px] text-dead-fg">
         <strong className="font-semibold">£{REWARD_GBP} is not being credited to you.</strong>{' '}
-        They are on Lumo and their control is running — the reward is real, it is just
-        attached to nobody.
+        They are on Lumo and running. The reward is real, it is just attached to nobody.
       </p>
     );
   }
@@ -137,7 +155,7 @@ function MoneyLine({ row, position }: { row: Row; position: ReturnType<typeof mo
           £{REWARD_GBP} {position === 'paid' ? 'paid' : 'confirmed'}.
         </strong>{' '}
         {resolved.confirmedButControlDropped
-          ? 'Their control has since dropped. This payment is not reversed — that is not something you could have controlled.'
+          ? 'Their control has since dropped. We do not take the payment back.'
           : position === 'paid'
             ? 'Already in a pay run.'
             : 'In the next monthly pay run.'}

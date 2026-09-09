@@ -39,7 +39,9 @@ async function loadStateModel() {
 }
 
 const cell = (value) => {
-  if (value === null || value === undefined) return '—';
+  // An en dash, not an em dash. Em dashes are banned repo-wide and a guard test
+  // enforces it; an empty cell in a wide table reads as a rendering fault.
+  if (value === null || value === undefined) return '–';
   return String(value).replace(/\|/g, '\\|').replace(/\n+/g, ' ');
 };
 
@@ -73,7 +75,7 @@ function render(model) {
   const { TRACKS, OWNER_LABELS, PRODUCER_GAPS, REWARD_GBP, QUALIFYING_DAYS, ACTIVATION } = model;
 
   const lines = [];
-  lines.push('# Lumo Hub — state model and copy table');
+  lines.push('# Lumo Hub, state model and copy table');
   lines.push('');
   lines.push(
     `> **Generated from \`${GENERATED_FROM}\` by \`npm run state-table\`. Do not edit by hand.**`,

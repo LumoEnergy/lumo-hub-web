@@ -8,7 +8,7 @@
  *   - scripts/verify-build.mjs, which asserts firebase.json agrees
  *
  * It is a real constant rather than `import.meta.env.BASE_URL` because BASE_URL is
- * only populated by a Vite build — under Vitest it is `/`, so a router basename read
+ * only populated by a Vite build, under Vitest it is `/`, so a router basename read
  * from it could not be tested at all. That is not a hypothetical: the first version
  * of this app read BASE_URL directly, and the one thing no test could check was
  * whether the router would mount.

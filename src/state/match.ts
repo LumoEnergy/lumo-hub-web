@@ -1,7 +1,7 @@
 import type { StateDefinition, StateTrack } from './types';
 
 /**
- * Match state — whether the household on the installer's list is the same household
+ * Match state, whether the household on the installer's list is the same household
  * that turned up on the platform.
  *
  * THIS TRACK GOT SIMPLER WHEN THE PRODUCT BECAME A CAMPAIGN. Previously an installer
@@ -15,7 +15,7 @@ import type { StateDefinition, StateTrack } from './types';
  *
  *   - The household ignores the email and signs up months later through a Lumo ad.
  *     Nothing connects them. This is `unmatched_different_email` and it is the state
- *     that silently eats a £50 — the household is on Lumo and earning, the installer
+ *     that silently eats a £50, the household is on Lumo and earning, the installer
  *     did the work, and the row looks like a lead that never converted.
  *   - Two rows on the installer's list are the same household, or two installers both
  *     claim one. This is `ambiguous`, and Lumo resolves it rather than guessing,
@@ -23,7 +23,7 @@ import type { StateDefinition, StateTrack } from './types';
  *
  * No producer today. There is no join anywhere in the estate between a contacted
  * household and a Lumo account, and the only installer-to-household link that exists
- * at all is `partnerTag` — a free-text `?partner=` URL parameter the customer can set
+ * at all is `partnerTag`, a free-text `?partner=` URL parameter the customer can set
  * for themselves. See `producerGaps.ts`.
  */
 
@@ -60,7 +60,7 @@ const STATES: Record<MatchStateId, StateDefinition<MatchStateId>> = {
       "They are on Lumo and running, but they came in on their own rather than through your campaign, so nothing ties them to you. Your £50 is not counted while this is open.",
     owner: 'installer',
     action:
-      'Confirm this is your customer and we will tie it to you. Do not re-add them — that just creates a duplicate and delays it further.',
+      'Confirm this is your customer and we will tie it to you. Do not re-add them, that just creates a duplicate and delays it further.',
     disposition: 'blocked',
   },
   ambiguous: {

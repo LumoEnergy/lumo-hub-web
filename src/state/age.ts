@@ -10,7 +10,7 @@ const MS_PER_DAY = 86_400_000;
 
 /**
  * Whole days between two ISO dates, floored. Both are parsed as UTC midnight, so
- * there is no daylight-saving edge and no dependence on the viewer's timezone — a
+ * there is no daylight-saving edge and no dependence on the viewer's timezone, a
  * blocker is the same age to an installer in Cornwall and a reviewer in a different
  * clock offset.
  */

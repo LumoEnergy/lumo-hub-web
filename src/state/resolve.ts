@@ -14,7 +14,7 @@ import { ageBand, fullDaysBetween } from './age';
  * Resolving four tracks into one row.
  *
  * A household sits in a state on every track simultaneously, and the UI has to make
- * the combination legible. Showing four badges per row does not do that — it moves
+ * the combination legible. Showing four badges per row does not do that, it moves
  * the work onto the installer. So one state is nominated as the thing standing in
  * their way, and the detail view shows all four.
  *

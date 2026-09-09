@@ -1,44 +1,32 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDemoStore } from '../store/DemoStore';
-import {
-  CUSTOMER_FILTERS,
-  buildRows,
-  dataQualityGroups,
-  filterRows,
-  isCustomerFilter,
-  sortRows,
-  unmatchedRows,
-} from '../selectors/customers';
-import type {
-  CustomerFilter,
-  CustomerRow,
-  SortDirection,
-  SortKey,
-} from '../selectors/customers';
-import { gbp } from '../selectors/customers';
+import { buildRows, sortRows } from '../selectors/customers';
+import type { CustomerRow, SortDirection, SortKey } from '../selectors/customers';
+import { VIEWS, isViewId, rowsForView, scheduledSendDates } from '../selectors/views';
+import type { ViewId } from '../selectors/views';
 import { displayName } from '../fixtures';
-import { REWARD_GBP } from '../state';
 import { CustomerCard, CustomerDetail } from '../components/CustomerRow';
 import { CustomerTable } from '../components/CustomerTable';
 import { Sheet } from '../components/Sheet';
 import { HeldRowFixer, UnmatchedFixer } from '../components/Fixers';
-import { Button, Callout, Card, EmptyState, ScreenTitle, SegmentedToggle } from '../components/ui';
+import { Button, Card, EmptyState, ScreenTitle, SegmentedToggle } from '../components/ui';
 
 /**
- * One list of customers, and only one.
+ * One list of customers, five ways of looking at it.
  *
- * There used to be two screens that both listed households — this one for progress
- * and an earnings screen for money — and the reader had to hold both in their head
- * and reconcile them. Money is now a column here, and the earnings screen is gone.
+ * There used to be two screens that both listed households, this one for progress
+ * and an earnings screen for money, and the reader had to hold both in their head
+ * and reconcile them. Money is now a column here and the earnings screen is gone.
  *
- * The attention queue that used to open the app is now the `Needs you` filter. Same
- * rows, same fixers, reachable in one click from the dashboard; it just no longer
- * greets a first-time visitor with a list of chores instead of their campaign.
+ * THE FIVE VIEWS ARE FIVE QUESTIONS, not one list filtered four times. See
+ * `selectors/views.ts` for what each one is for and why it gets its own columns.
  *
- * The unmatched callout survives, and it is the only one left. A household earning
- * with nothing tying it to the firm is money on the table that no amount of sorting
- * will surface, because the row looks like an ordinary lead that never converted.
+ * NO CALLOUTS. There was a pinned banner saying "£100 of yours is going to nobody",
+ * which was true and was also the loudest thing on the screen on every single visit,
+ * including the visits where you came to look at something else. Unmatched
+ * households are now four rows in Needs you with an instruction next to them, which
+ * is where a job belongs.
  */
 
 /**
@@ -58,27 +46,22 @@ export function CustomersPage() {
   const [direction, setDirection] = useState<SortDirection>('desc');
   const [limit, setLimit] = useState(PAGE);
 
-  // The filter lives in the URL so the dashboard can link straight to it, and so a
+  // The view lives in the URL so the dashboard can link straight to it, and so a
   // filtered view is a thing you can send to a colleague.
-  const raw = params.get('filter');
-  const filter: CustomerFilter = isCustomerFilter(raw) ? raw : 'all';
+  const raw = params.get('view');
+  const view: ViewId = isViewId(raw) ? raw : 'all';
 
   const rows = useMemo(() => buildRows(customers, asOf), [customers, asOf]);
-  const unmatched = useMemo(() => unmatchedRows(rows), [rows]);
-  const quality = useMemo(() => dataQualityGroups(rows), [rows]);
-  const filtered = useMemo(() => filterRows(rows, filter), [rows, filter]);
-  const sorted = useMemo(() => sortRows(filtered, sort, direction), [filtered, sort, direction]);
+  const context = useMemo(() => ({ scheduled: scheduledSendDates(rows, company) }), [rows, company]);
+  const selected = useMemo(() => rowsForView(rows, view), [rows, view]);
+  const sorted = useMemo(() => sortRows(selected, sort, direction), [selected, sort, direction]);
   const visible = useMemo(() => sorted.slice(0, limit), [sorted, limit]);
 
-  const setFilter = (next: CustomerFilter) => {
+  const setView = (next: ViewId) => {
     setLimit(PAGE);
-    if (next === 'all') {
-      params.delete('filter');
-      setParams(params, { replace: true });
-    } else {
-      params.set('filter', next);
-      setParams(params, { replace: true });
-    }
+    if (next === 'all') params.delete('view');
+    else params.set('view', next);
+    setParams(params, { replace: true });
   };
 
   const onSort = (key: SortKey) => {
@@ -92,74 +75,34 @@ export function CustomersPage() {
 
   const counts = useMemo(
     () =>
-      Object.fromEntries(
-        CUSTOMER_FILTERS.map((f) => [f.id, filterRows(rows, f.id).length]),
-      ) as Record<CustomerFilter, number>,
+      Object.fromEntries(VIEWS.map((v) => [v.id, rowsForView(rows, v.id).length])) as Record<
+        ViewId,
+        number
+      >,
     [rows],
   );
 
+  const definition = VIEWS.find((v) => v.id === view)!;
+
   return (
     <>
-      <ScreenTitle
-        count={rows.length}
-        sub={`Everyone ${company.name} handed over, where they have got to, and what they are worth.`}
-      >
+      <ScreenTitle count={rows.length} sub={`Everyone ${company.name} handed over.`}>
         Customers
       </ScreenTitle>
 
-      {unmatched.length > 0 ? (
-        <div className="px-4 lg:px-0">
-          <Callout
-            tone="alarm"
-            title={`${gbp(unmatched.length * REWARD_GBP)} of yours is going to nobody`}
-            body={`${
-              unmatched.length === 1 ? 'One household is' : `${unmatched.length} households are`
-            } on Lumo and running, but came in on their own rather than through your campaign, so nothing ties them to you. It will not fix itself.`}
-            action={
-              <Button variant="secondary" onClick={() => setOpen(unmatched[0])}>
-                {unmatched.length === 1 ? 'Claim it' : `Claim ${unmatched.length}`}
-              </Button>
-            }
-          />
-        </div>
-      ) : null}
-
       <div className="mt-4 px-4 lg:px-0">
-        <SegmentedToggle<CustomerFilter>
-          label="Filter customers"
-          value={filter}
-          onChange={setFilter}
-          options={CUSTOMER_FILTERS.map((f) => ({
-            value: f.id,
-            label: f.label,
-            count: counts[f.id],
-          }))}
+        <SegmentedToggle<ViewId>
+          label="Which customers"
+          value={view}
+          onChange={setView}
+          options={VIEWS.map((v) => ({ value: v.id, label: v.label, count: counts[v.id] }))}
         />
+        <p className="mt-2 text-[13px] text-ink-soft">{definition.blurb}</p>
       </div>
-
-      {/* The argument for doing the work, on the filter that shows the work. Each of
-          these rows genuinely needs its own address, so they stay as rows; what would
-          be daft is repeating the reasoning on all thirty-four of them. */}
-      {filter === 'attention' && quality.length > 0 ? (
-        <div className="mt-3 px-4 lg:px-0">
-          <Card className="p-4">
-            <ul className="space-y-2.5">
-              {quality.map((group) => (
-                <li key={group.contact}>
-                  <p className="text-[14px] font-semibold text-ink">
-                    {group.rows.length} {group.label.toLowerCase()}
-                  </p>
-                  <p className="text-[13px] leading-snug text-ink-soft">{group.argument}</p>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </div>
-      ) : null}
 
       {sorted.length === 0 ? (
         <div className="mt-3">
-          <EmptyForFilter filter={filter} onShowAll={() => setFilter('all')} />
+          <EmptyForView view={view} onShowAll={() => setView('all')} />
         </div>
       ) : (
         <>
@@ -167,6 +110,8 @@ export function CustomersPage() {
           <div className="mt-3 hidden lg:block">
             <CustomerTable
               rows={visible}
+              view={view}
+              context={context}
               sort={sort}
               direction={direction}
               onSort={onSort}
@@ -179,7 +124,7 @@ export function CustomersPage() {
             <Card className="mx-4 overflow-hidden">
               <ul>
                 {visible.map((row) => (
-                  <CustomerCard key={row.customer.id} row={row} onOpen={setOpen} />
+                  <CustomerCard key={row.customer.id} row={row} onOpen={setOpen} view={view} />
                 ))}
               </ul>
             </Card>
@@ -213,12 +158,13 @@ export function CustomersPage() {
 /**
  * The detail panel, and the only place the product asks for anything.
  *
- * Which fixer appears is decided by ownership — the concept the dropped `Whose`
+ * Which fixer appears is decided by ownership, the concept the dropped `Whose`
  * column was trying and failing to communicate. It works here because it arrives as
  * a specific question about one household rather than as a label to interpret.
  */
 function Detail({ row, onDone }: { row: CustomerRow; onDone: () => void }) {
-  const held = row.customer.contact === 'held_no_email' || row.customer.contact === 'held_unconfirmed';
+  const held =
+    row.customer.contact === 'held_no_email' || row.customer.contact === 'held_unconfirmed';
 
   return (
     <>
@@ -229,38 +175,36 @@ function Detail({ row, onDone }: { row: CustomerRow; onDone: () => void }) {
   );
 }
 
-function EmptyForFilter({
-  filter,
-  onShowAll,
-}: {
-  filter: CustomerFilter;
-  onShowAll: () => void;
-}) {
-  const copy: Record<CustomerFilter, { title: string; body: string }> = {
+function EmptyForView({ view, onShowAll }: { view: ViewId; onShowAll: () => void }) {
+  const copy: Record<ViewId, { title: string; body: string }> = {
     all: {
       title: 'No customers yet',
-      body: 'Once you have handed over a list, every household lands here.',
+      body: 'Hand over a list and every household lands here.',
+    },
+    invited: {
+      title: 'Nothing sent yet',
+      body: 'Approve the email on the Campaign tab and the first batch goes out.',
+    },
+    waiting: {
+      title: 'Everyone has been emailed',
+      body: 'Your whole list has had the campaign email. Nothing is queued.',
     },
     attention: {
       title: 'Nothing needs you',
-      body: 'Every household is either earning, waiting on something that resolves itself, or one we have stopped chasing. This is the good outcome.',
+      body: 'No bounces, no missing addresses, nobody stalled. This is the good outcome.',
     },
-    earning: {
-      title: 'Nobody is earning yet',
-      body: 'A household earns once it has signed up, connected its battery and run smart control for 30 consecutive days.',
-    },
-    not_emailed: {
-      title: 'Everyone has been emailed',
-      body: 'Your whole list has had the campaign email. Nothing is queued.',
+    active: {
+      title: 'Nobody is live yet',
+      body: 'Households appear here once they have signed up and connected a battery.',
     },
   };
 
   return (
     <EmptyState
-      title={copy[filter].title}
-      body={copy[filter].body}
+      title={copy[view].title}
+      body={copy[view].body}
       action={
-        filter === 'all' ? undefined : (
+        view === 'all' ? undefined : (
           <Button variant="secondary" onClick={onShowAll}>
             See all customers
           </Button>

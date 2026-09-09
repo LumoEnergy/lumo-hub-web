@@ -36,7 +36,7 @@ describe.each(tracks.map((t) => [t.name, t] as const))('%s track', (_name, track
       const state = track.states[id];
       if (state.disposition !== 'blocked') continue;
       // Three blocked states carry no action. Two are terminal facts about the
-      // household rather than work — they opted out, or they reported the email — so
+      // household rather than work, they opted out, or they reported the email, so
       // the correct response is to leave them alone. The third, `no_response`, is a
       // cohort rather than a task: it is the largest state in any campaign, and a
       // per-row action repeated a hundred times would bury the rows that need one

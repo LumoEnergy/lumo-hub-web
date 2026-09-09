@@ -19,7 +19,7 @@
  * the earnings track, whose states are consequences rather than work: nobody acts on
  * "not earning yet", and the real owner is whoever owns the household's activation
  * blocker. Modelling it explicitly keeps the invariant that a state with a
- * recommended action always has somebody to do it — a row that shows an action with
+ * recommended action always has somebody to do it, a row that shows an action with
  * nobody attached is how a list loses an installer's trust.
  */
 export type Owner =
@@ -54,7 +54,7 @@ export interface StateDefinition<Id extends string> {
  * A state track: its definitions, its permitted transitions, and the states a
  * record can legitimately start in.
  *
- * Transitions are asserted in tests rather than enforced at runtime — the prototype
+ * Transitions are asserted in tests rather than enforced at runtime, the prototype
  * has no state machine driving it. Their job is to make illegal paths reviewable,
  * and to encode commercial rules that would otherwise live only in prose. The
  * clearest example is the earnings track, where `confirmed` has no edge to `lapsed`:

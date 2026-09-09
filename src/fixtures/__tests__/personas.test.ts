@@ -5,6 +5,7 @@ import {
   MATCH_STATE_IDS,
   EARNINGS_STATE_IDS,
   HELD_STATES,
+  GRID_REWARD_GBP,
   resolveCustomerState,
 } from '../../state';
 import { PERSONAS, PERSONA_IDS, DEFAULT_PERSONA, materialise } from '../personas';
@@ -18,7 +19,7 @@ describe('persona coverage', () => {
   it('exercises every contact state across the three personas', () => {
     const seen = new Set(all.flatMap((p) => p.customers.map((c) => c.contact)));
     const missing = CONTACT_STATE_IDS.filter((id) => !seen.has(id));
-    // Only `imported` is genuinely transient — a row is in it for as long as Lumo is
+    // Only `imported` is genuinely transient, a row is in it for as long as Lumo is
     // mid-pass, and a fixture cannot sit there honestly.
     //
     // `queued` used to be excluded on the same reasoning and that was wrong. Once
@@ -304,15 +305,36 @@ describe('persona shape', () => {
     }
   });
 
-  it('quotes no savings figure in the campaign email', () => {
-    // Nothing in the estate can substantiate a per-household number yet.
+  /**
+   * ONE NUMBER, AND IT IS THE GUARANTEED ONE.
+   *
+   * The email used to carry no figure at all, on the grounds that nothing in the
+   * estate could substantiate a per-household saving. That reasoning still holds for
+   * savings and this test still enforces it. The grid reward is different in kind: it
+   * is a commitment Lumo makes rather than an outcome Lumo predicts, so it can be
+   * stated as a fact, and it is the strongest thing the campaign has to say.
+   *
+   * The gap this test cannot catch is on `GRID_REWARD_GBP`: the production pay-out is
+   * banded by battery size, and a flat £150 is one band.
+   */
+  it('leads on the guaranteed grid reward and claims no saving', () => {
     for (const p of all) {
       const text = [
         p.company.campaignEmail.subject,
         p.company.campaignEmail.preheader,
         ...p.company.campaignEmail.body,
       ].join(' ');
-      expect(text).not.toMatch(/£\s?\d|\d+\s?%|per year|a year|annually/i);
+
+      expect(p.company.campaignEmail.body[0]).toMatch(
+        new RegExp(`guaranteed £${GRID_REWARD_GBP} per year`, 'i'),
+      );
+      expect(text).not.toMatch(/sav(e|ing)|cut your bill by|£\s?\d+ a month|\d+\s?% (off|less)/i);
+      // Every money figure in the email is the one guaranteed number.
+      for (const figure of text.match(/£\s?\d[\d,]*/g) ?? []) {
+        expect(figure.replace(/\s/g, ''), 'an unsubstantiated figure').toBe(
+          `£${GRID_REWARD_GBP}`,
+        );
+      }
     }
   });
 });

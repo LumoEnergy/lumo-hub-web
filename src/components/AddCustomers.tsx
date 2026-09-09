@@ -14,7 +14,7 @@ import { Button } from './ui';
  * would make the common one feel like an afterthought.
  *
  * WHAT IS NOT ASKED FOR. There is no inverter make and no battery size. An imported
- * back-book rarely carries either — a job record is not a kit record — and demanding
+ * back-book rarely carries either, a job record is not a kit record, and demanding
  * them here would either block the add or collect a guess. There is also no fork over
  * who makes contact: the firm has handed over their book, which is the answer.
  *
@@ -108,8 +108,8 @@ export function AddCustomers() {
         </p>
         <p className="mt-1 text-[14px] text-ink-soft">
           {company.campaignEmail.approved
-            ? 'They are in the send queue. You do not need to do anything else — no email to write, and nothing to tell us.'
-            : 'They will go out with the rest of your list once you approve the email above.'}
+            ? 'In the send queue. Nothing else for you to do.'
+            : 'They go out with the rest once you approve the email above.'}
         </p>
         <div className="mt-3">
           <Button variant="secondary" small onClick={() => setAdded(null)}>
@@ -123,9 +123,8 @@ export function AddCustomers() {
   return (
     <form onSubmit={submit}>
       <p className="text-[14px] text-ink-soft">
-        Paste straight from a spreadsheet — name, email and postcode, in that order. Rows
-        without an email still go on your list, we just cannot write to them until you have
-        one.
+        Paste straight from a spreadsheet: name, email, postcode. No email is fine, they
+        just wait until you have one.
       </p>
 
       <div className="mt-3 overflow-x-auto">

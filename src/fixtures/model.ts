@@ -49,7 +49,7 @@ export interface HubCustomer {
    * common defect in a real back-book and it is why `held_no_email` exists.
    */
   readonly email: string | null;
-  /** `null` when the list did not say. Common — a job record is not a kit record. */
+  /** `null` when the list did not say. Common, a job record is not a kit record. */
   readonly postcode: string | null;
   readonly inverterMake: string | null;
   readonly batterySizeKwh: number | null;
@@ -85,7 +85,7 @@ export interface HubCustomer {
  * accept.
  *
  * `delegated_subdomain` is the installer publishing DKIM and SPF records for a
- * subdomain of their own domain. It is NOT spoofing — DMARC passes precisely because
+ * subdomain of their own domain. It is NOT spoofing, DMARC passes precisely because
  * the domain owner published the key, which is the same mechanism behind every
  * "sent via" email from every brand. It authenticates as them and keeps their main
  * domain's reputation insulated. Ten minutes for whoever runs their website, and a
@@ -109,7 +109,7 @@ export interface SenderConfig {
  * relating to their installation.
  *
  * This is the lawful basis for the entire campaign. Lumo sends as a processor on the
- * firm's instruction, relying on the firm's own relationship with the household — so
+ * firm's instruction, relying on the firm's own relationship with the household, so
  * who confirmed it and when has to be an auditable record, not a checkbox whose
  * value is thrown away. It protects the sending domain as much as the company: a
  * list without real permission produces the complaints that get every installer's
@@ -120,25 +120,41 @@ export interface Attestation {
   readonly confirmedOn: string;
 }
 
+/**
+ * A person at the firm with access.
+ *
+ * TWO ROLES, AND THAT IS THE WHOLE PERMISSION MODEL. Admin can approve the email,
+ * hand over lists and invite people. Viewer can look. The temptation is a third role
+ * for the office manager who should be able to fix addresses but not approve a send
+ * to eight hundred people, and that is a real distinction, but it is one to add when
+ * a firm asks for it rather than one to design for now.
+ *
+ * `owner` and `member` were the previous names and were worse: `owner` implied
+ * something about who is paid, which is a company-level fact, and `member` said
+ * nothing at all about what the person can do.
+ */
 export interface HubSeat {
   readonly id: string;
   readonly name: string;
-  readonly role: 'owner' | 'member';
+  readonly email: string;
+  readonly role: 'admin' | 'viewer';
   readonly isCurrentUser: boolean;
+  /** `invited` until they accept. Nothing accepts in a prototype. */
+  readonly status: 'active' | 'invited';
 }
 
 /**
  * A file of households the firm handed over, and what became of it.
  *
  * The first imports are done by hand by Lumo staff from a spreadsheet the installer
- * emails over. That is the right call for the first few firms — it converts far
+ * emails over. That is the right call for the first few firms, it converts far
  * better than asking them to learn an upload screen, and it is how you find out what
  * real lists look like. It is also exactly why the outcome per row needs a real home
  * rather than living in whichever spreadsheet the person doing it kept.
  *
  * PROCESSING IS ASYNCHRONOUS AND THE UI MUST SAY SO. Loading a book means matching
  * against existing Lumo accounts, de-duplicating within and across files, and
- * deciding which rows are unusable — minutes to hours, not the length of a page
+ * deciding which rows are unusable, minutes to hours, not the length of a page
  * load. A screen that implies otherwise turns a normal wait into a bug report. So a
  * batch arrives with a row count it can state immediately and outcome counts that
  * are honestly `null` until the work is done.
@@ -174,20 +190,20 @@ export interface ImportBatch {
  *
  * THE SCHEDULE IS A DELIVERABILITY MECHANISM, NOT A CONVENIENCE. Eight hundred
  * emails leaving a young sending domain in one minute is the single most reliable
- * way to get every subsequent campaign filtered — for this installer and, because
+ * way to get every subsequent campaign filtered, for this installer and, because
  * the domain is shared at the lower rung, for every other installer too. Throttling
  * is what makes the channel survive contact with Gmail.
  *
  * It is exposed rather than hidden because it is also the honest answer to "when
- * will I see something?", and because a firm with a reason to go slower or faster —
- * a holiday, a van off the road, an engineer who wants to field the replies — should
+ * will I see something?", and because a firm with a reason to go slower or faster,
+ * a holiday, a van off the road, an engineer who wants to field the replies, should
  * be able to say so without emailing us.
  */
 export interface SendBatch {
   readonly id: string;
   /**
    * ISO date. Meaningless until the campaign is approved, because the clock starts
-   * at sign-off — the UI shows unapproved batches as "day 1, day 2" instead.
+   * at sign-off, the UI shows unapproved batches as "day 1, day 2" instead.
    */
   readonly date: string;
   readonly count: number;
@@ -199,8 +215,8 @@ export interface SendBatch {
 /**
  * The campaign email, and the firm's one-time sign-off on it.
  *
- * One approval covers the whole list and every later addition. Asking per batch —
- * still less per household — would reintroduce the friction this rebuild exists to
+ * One approval covers the whole list and every later addition. Asking per batch,
+ * still less per household, would reintroduce the friction this rebuild exists to
  * remove.
  */
 export interface CampaignEmail {
@@ -226,7 +242,7 @@ export interface HubCompany {
   /** Households per sending day. Lower for a domain that has not warmed up yet. */
   readonly dailySendCap: number;
   /**
-   * A COMPANY link for the firm's own channels — a customer newsletter, a Facebook
+   * A COMPANY link for the firm's own channels, a customer newsletter, a Facebook
    * group, the "check your battery" email they already send. Deliberately not a
    * personal link and not a route for adding an individual: it is content they drop
    * into something they were writing anyway, in their most trusted channel, with no
@@ -257,7 +273,7 @@ export const CUSTOMER_FIELD_PROVENANCE: Readonly<Record<keyof HubCustomer, Prove
   },
   firstName: {
     source: 'installer-input',
-    note: 'From the supplied list. Also present on the platform once the household signs up, at which point the two may disagree — the platform value should win for display.',
+    note: 'From the supplied list. Also present on the platform once the household signs up, at which point the two may disagree, the platform value should win for display.',
   },
   lastName: {
     source: 'installer-input',

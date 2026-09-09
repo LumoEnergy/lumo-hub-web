@@ -19,7 +19,7 @@ import { AGE_BAND_LABELS, ageLabel } from '../state';
  *
  * ON PADDING. Mobile screens own their own 16px gutter (`px-4`); on desktop the
  * shell's container supplies 32px, so screen-level components drop their padding at
- * `lg`. Doing it the other way round — padding on the container at every width —
+ * `lg`. Doing it the other way round, padding on the container at every width,
  * double-pads the phone layout.
  */
 
@@ -34,7 +34,7 @@ export function Card({
 }: {
   children: ReactNode;
   className?: string;
-  /** `section` where the card is a landmark in its own right — see `Panel`. */
+  /** `section` where the card is a landmark in its own right, see `Panel`. */
   as?: 'div' | 'section';
 } & Pick<HTMLAttributes<HTMLElement>, 'aria-labelledby'>) {
   return (
@@ -65,7 +65,10 @@ export function Panel({
   const id = useId();
   return (
     <Card as="section" aria-labelledby={id} className={cx('overflow-hidden', className)}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-line bg-sunk px-4 py-3">
+      {/* A whisper of accent across the header. Enough that a stack of panels reads
+          as a designed page rather than a run of grey bars, nowhere near enough to
+          compete with the one green number on the screen that means money. */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-line bg-gradient-to-r from-accent-soft to-sunk px-4 py-3">
         <h2 id={id} className="text-[15px] font-bold text-ink">
           {title}
         </h2>
@@ -369,7 +372,7 @@ export function SegmentedToggle<T extends string>({
             onClick={() => onChange(option.value)}
             className={cx(
               'h-10 flex-1 rounded-full px-4 text-[14px] font-semibold transition-colors duration-150 lg:h-8 lg:flex-none lg:text-[13px]',
-              active ? 'bg-ink text-white' : 'text-ink-soft',
+              active ? 'bg-accent text-white' : 'text-ink-soft hover:text-ink',
             )}
           >
             {option.label}
@@ -452,19 +455,23 @@ export function CopyButton({ value }: { value: string }) {
 }
 
 /**
- * An em dash, for data an imported back-book genuinely does not carry.
+ * Data an imported back-book genuinely does not carry.
  *
- * `label` is optional because the same dash does two jobs: a missing field, where
- * naming it explains the gap, and a figure that does not exist yet — an outcome
- * count on a file still processing — where there is nothing to name.
+ * Words, not a dash. A dash is quieter, which is the argument for it, but it also
+ * reads as a rendering failure to anyone who has not been told the convention, and
+ * "not given" is two words that never need explaining.
+ *
+ * `label` is optional because this does two jobs: a missing field, where naming it
+ * explains the gap, and a figure that does not exist yet, such as an outcome count
+ * on a file still processing, where there is nothing to name.
  */
 export function Missing({ label }: { label?: string }) {
   return (
     <span
-      className="text-ink-mute"
+      className="text-[13px] text-ink-mute italic"
       title={label ? `Not in the list you supplied: ${label}` : undefined}
     >
-      —
+      not given
     </span>
   );
 }

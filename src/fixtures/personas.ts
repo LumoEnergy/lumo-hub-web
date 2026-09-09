@@ -1,4 +1,5 @@
 import type { ActivationStateId, ContactStateId, MatchStateId } from '../state';
+import { GRID_REWARD_GBP } from '../state';
 import type { HubCompany, HubCustomer, HubSeat, SenderConfig } from './model';
 
 /**
@@ -6,7 +7,7 @@ import type { HubCompany, HubCustomer, HubSeat, SenderConfig } from './model';
  *
  * Research fidelity wins where the two audiences conflict. The aspirational demo
  * path is a subset of a complete state model, so a flattering persona can always
- * produce the good story — but a happy-path-only model cannot produce credible
+ * produce the good story, but a happy-path-only model cannot produce credible
  * research. So the model is complete and the persona chooses what you see.
  *
  * THE PERSONAS ARE CAMPAIGN STAGES, NOT PORTFOLIO SIZES. An earlier set assumed a
@@ -318,24 +319,31 @@ const bulk = (
  * The campaign email itself, and a research artefact in its own right.
  *
  * Written to be sent BY the installer, not by Lumo: the firm has the relationship
- * and the permission, and the reply-to comes back to them. Note what is absent —
- * there is no savings figure and no annual estimate, because nothing in the estate
- * can currently substantiate a per-household number and a claim the product cannot
- * back is how a channel dies. If a defensible figure ever exists, this is the one
- * place to add it.
+ * and the permission, and the reply-to comes back to them.
+ *
+ * IT NOW LEADS ON THE GUARANTEED GRID REWARD, which is a deliberate reversal. The
+ * first version carried no number at all, on the grounds that nothing in the estate
+ * could substantiate a per-household saving and an unbacked claim is how a channel
+ * dies. That reasoning still holds for savings, and there is still no savings figure
+ * here. The grid reward is a different kind of number: it is a commitment Lumo makes
+ * rather than an outcome Lumo predicts, so it can be stated as a fact.
+ *
+ * The caveat is real and lives on `GRID_REWARD_GBP`: the production pay-out is banded
+ * by battery size, and a flat £150 is one band.
  */
 const CAMPAIGN_EMAIL = {
-  subject: 'Switching your battery over to smart control',
-  preheader: "We've partnered with Lumo to get more out of the battery we fitted for you.",
+  subject: `Earn a guaranteed £${GRID_REWARD_GBP} a year from your battery`,
+  preheader: `We have partnered with Lumo, who pay you £${GRID_REWARD_GBP} a year for helping the grid.`,
   body: [
-    'When we fitted your battery we set it up to store your solar. Since then we have partnered with Lumo, who can control it automatically against your electricity tariff — charging it when power is cheap and using it when it is not.',
-    'There is nothing to install and nothing to pay. It connects to the inverter you already have, and you stay in charge: you can switch it off again whenever you like.',
-    'It takes about five minutes to set up. If you would rather ask us first, just reply to this email and it comes straight back to us.',
+    `Lumo will earn you a guaranteed £${GRID_REWARD_GBP} per year for helping the grid.`,
+    'Your battery sits full most of the day. Lumo shifts when it charges so it helps balance the grid at the moments that matter, and you get paid for it. It also charges when power is cheapest, so your bills come down too.',
+    'Nothing to install, nothing to pay. It works with the inverter we already fitted, and you can turn it off whenever you like.',
+    'Five minutes to set up. Reply to this email if you would rather ask us first.',
   ],
 } as const;
 
 // -----------------------------------------------------------------------------
-// MID-CAMPAIGN — the founder and investor demo.
+// MID-CAMPAIGN, the founder and investor demo.
 //
 // Northfield Renewables emailed over 840 past jobs five weeks ago. 808 loaded, and
 // the campaign is genuinely mid-flight: 486 emailed so far, 288 still queued behind
@@ -346,14 +354,46 @@ const CAMPAIGN_EMAIL = {
 // on a cold-ish back-book email. Nobody who has run an email campaign believes that,
 // and a funnel a founder can dismiss in one glance takes the rest of the product
 // down with it. Eight hundred households and the same 37 sign-ups is 8% of those
-// delivered — good, plausible, and defensible in the room. It is also simply a more
+// delivered, good, plausible, and defensible in the room. It is also simply a more
 // honest picture of an installer with a decade of fits behind them.
 // -----------------------------------------------------------------------------
 
 const NORTHFIELD_SEATS: readonly HubSeat[] = [
-  { id: 'seat-1', name: 'Ade Bankole', role: 'owner', isCurrentUser: true },
-  { id: 'seat-2', name: 'Sean Docherty', role: 'member', isCurrentUser: false },
-  { id: 'seat-3', name: 'Rita Mensah', role: 'member', isCurrentUser: false },
+  {
+    id: 'seat-1',
+    name: 'Ade Bankole',
+    email: 'ade@northfieldrenewables.co.uk',
+    role: 'admin',
+    isCurrentUser: true,
+    status: 'active',
+  },
+  {
+    id: 'seat-2',
+    name: 'Sean Docherty',
+    email: 'sean@northfieldrenewables.co.uk',
+    role: 'admin',
+    isCurrentUser: false,
+    status: 'active',
+  },
+  {
+    id: 'seat-3',
+    name: 'Rita Mensah',
+    email: 'rita@northfieldrenewables.co.uk',
+    role: 'viewer',
+    isCurrentUser: false,
+    status: 'active',
+  },
+  // An unaccepted invite, because on a real account there is nearly always one, and
+  // a team screen that only ever shows accepted people hides the commonest question
+  // somebody arrives with: why can my colleague not get in.
+  {
+    id: 'seat-4',
+    name: 'Priya Shah',
+    email: 'priya@northfieldrenewables.co.uk',
+    role: 'viewer',
+    isCurrentUser: false,
+    status: 'invited',
+  },
 ];
 
 const MID_CAMPAIGN_CUSTOMERS: readonly CustomerSeed[] = [
@@ -524,7 +564,7 @@ const MID_CAMPAIGN: Persona = {
 };
 
 // -----------------------------------------------------------------------------
-// AWAITING APPROVAL — the onboarding promise, tested.
+// AWAITING APPROVAL, the onboarding promise, tested.
 //
 // Kestrel Electrical signed up four days ago and emailed over a spreadsheet. Lumo
 // has loaded and cleaned it. Nothing has been sent, because the one sign-off the
@@ -536,8 +576,22 @@ const MID_CAMPAIGN: Persona = {
 // -----------------------------------------------------------------------------
 
 const KESTREL_SEATS: readonly HubSeat[] = [
-  { id: 'seat-1', name: 'Joanne Pike', role: 'owner', isCurrentUser: true },
-  { id: 'seat-2', name: 'Dev Raichura', role: 'member', isCurrentUser: false },
+  {
+    id: 'seat-1',
+    name: 'Joanne Pike',
+    email: 'joanne@kestrelenergy.co.uk',
+    role: 'admin',
+    isCurrentUser: true,
+    status: 'active',
+  },
+  {
+    id: 'seat-2',
+    name: 'Dev Raichura',
+    email: 'dev@kestrelenergy.co.uk',
+    role: 'viewer',
+    isCurrentUser: false,
+    status: 'active',
+  },
 ];
 
 const AWAITING_APPROVAL_CUSTOMERS: readonly CustomerSeed[] = [
@@ -586,7 +640,7 @@ const AWAITING_APPROVAL: Persona = {
       },
     ],
     // Nothing has sent, so every batch is still ahead of them and the dates are
-    // meaningless — the UI renders these as "day 1, day 2" until approval starts
+    // meaningless, the UI renders these as "day 1, day 2" until approval starts
     // the clock. 50 a day, because a domain with no sending history that opens with
     // 118 emails in a minute is a domain that gets filtered.
     schedule: [
@@ -601,7 +655,7 @@ const AWAITING_APPROVAL: Persona = {
 };
 
 // -----------------------------------------------------------------------------
-// MESSY LIST — the research conversation.
+// MESSY LIST, the research conversation.
 //
 // Fenwick Solar handed over a genuinely bad export: nearly half the rows had no
 // usable email, the addresses are old enough that a lot bounced, and two households
@@ -613,7 +667,14 @@ const AWAITING_APPROVAL: Persona = {
 // -----------------------------------------------------------------------------
 
 const FENWICK_SEATS: readonly HubSeat[] = [
-  { id: 'seat-1', name: 'Gordon Fenwick', role: 'owner', isCurrentUser: true },
+  {
+    id: 'seat-1',
+    name: 'Gordon Fenwick',
+    email: 'gordon@fenwickelectrical.co.uk',
+    role: 'admin',
+    isCurrentUser: true,
+    status: 'active',
+  },
 ];
 
 const MESSY_CUSTOMERS: readonly CustomerSeed[] = [
@@ -659,7 +720,7 @@ const MESSY_LIST: Persona = {
     seats: FENWICK_SEATS,
     // THE ONE PERSONA ON THE TOP RUNG, and it belongs here rather than on the
     // flagship. Gordon's web person published the records, so this list sends from
-    // his own domain — and his list is the filthy one. That is a sharper research
+    // his own domain, and his list is the filthy one. That is a sharper research
     // conversation than the same config on a clean list: a 23% bounce rate and two
     // spam complaints are now damaging the reputation of fenwicksolar.co.uk, which
     // is his asset rather than ours, and it is the most concrete argument the

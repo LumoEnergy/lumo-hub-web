@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { HubCompany } from '../fixtures';
+import { Button } from './ui';
+import { Sheet } from './Sheet';
 
 /**
  * The campaign email, rendered as it arrives.
@@ -9,13 +11,28 @@ import type { HubCompany } from '../fixtures';
  * name; showing them the exact thing that lands, including the From line, is the
  * minimum price of that.
  *
- * THE FROM LINE IS THE RESEARCH ARTEFACT. It is rendered in full — display name,
- * sending domain, reply-to — because which of those an installer will accept is one of
- * the open questions the five sessions exist to answer, and it cannot be asked in the
+ * THE FROM LINE IS THE RESEARCH ARTEFACT. It is rendered in full, display name,
+ * sending domain and reply-to, because which of those an installer will accept is one
+ * of the open questions the sessions exist to answer, and it cannot be asked in the
  * abstract. Show them the header and they have an opinion immediately.
+ *
+ * IT IS ALSO EDITABLE NOW, and that is a genuine product decision rather than a
+ * demo affordance. Read-only made approval a take-it-or-leave-it: the firm knows
+ * their customers and we do not, and a firm that cannot change a sentence will
+ * either not approve at all or approve something that reads wrong in their voice.
+ * The subject and the paragraphs are theirs. The footer is not, because the
+ * unsubscribe line and the "sent on behalf of" disclosure are what make the send
+ * lawful, and those are not ours to let anyone delete.
  */
-export function EmailPreview({ company }: { company: HubCompany }) {
+export function EmailPreview({
+  company,
+  onEdit,
+}: {
+  company: HubCompany;
+  onEdit?: (subject: string, body: readonly string[]) => void;
+}) {
   const { sender, campaignEmail } = company;
+  const [editing, setEditing] = useState(false);
   const viaNote = sender.rung === 'lumo_domain';
 
   return (
@@ -51,35 +68,135 @@ export function EmailPreview({ company }: { company: HubCompany }) {
       {/* Body. Deliberately plain: no hero image, no button the size of a fist. */}
       <div className="space-y-3 px-4 py-4">
         <p className="text-[15px] text-ink">Hello Marion,</p>
-        {campaignEmail.body.map((paragraph) => (
-          <p key={paragraph.slice(0, 24)} className="text-[15px] leading-relaxed text-ink">
+        {campaignEmail.body.map((paragraph, i) => (
+          <p
+            key={paragraph.slice(0, 24)}
+            className={
+              // The grid reward is the first paragraph and it is set larger than the
+              // rest. An offer buried in paragraph three is an offer nobody reads.
+              i === 0
+                ? 'text-[19px] leading-snug font-bold text-accent'
+                : 'text-[15px] leading-relaxed text-ink'
+            }
+          >
             {paragraph}
           </p>
         ))}
         <p className="pt-1">
-          <span className="inline-flex h-10 items-center rounded-full bg-accent px-4 text-[14px] font-semibold text-white">
-            Set up smart control
+          <span className="inline-flex h-10 items-center rounded-full bg-accent px-5 text-[14px] font-semibold text-white">
+            Get Lumo now
           </span>
         </p>
-        <p className="text-[15px] text-ink">
-          — {sender.displayName}
-        </p>
+        <p className="text-[15px] text-ink">{sender.displayName}</p>
         <p className="border-t border-line pt-3 text-[12px] text-ink-mute">
           Sent by Lumo on behalf of {sender.displayName}, who fitted your battery. Not
           interested? Unsubscribe and neither of us will contact you about this again.
         </p>
       </div>
+
+      {onEdit ? (
+        <div className="flex items-center justify-between gap-3 border-t border-line bg-sunk px-4 py-2.5">
+          <p className="text-[12px] text-ink-mute">Your customers, your words. Change anything.</p>
+          <Button variant="secondary" small onClick={() => setEditing(true)}>
+            Edit the email
+          </Button>
+        </div>
+      ) : null}
+
+      {onEdit ? (
+        <Sheet open={editing} title="Edit the email" onClose={() => setEditing(false)}>
+          <EmailEditor
+            company={company}
+            onSave={(subject, body) => {
+              onEdit(subject, body);
+              setEditing(false);
+            }}
+          />
+        </Sheet>
+      ) : null}
     </div>
   );
 }
 
 /**
- * The sender ladder, as an explicit choice with its cost stated.
+ * The editor. Subject plus one textarea per paragraph, and nothing else.
  *
- * This is a research probe, not a recommendation, and it must not read as one. Which
- * rung a firm will accept is genuinely unknown: rung 1 needs nothing from them and
- * ships immediately, rung 2 authenticates as their own domain and protects their
+ * No rich text, no merge fields, no template picker. A firm changing this email is
+ * changing a sentence or two into their own voice, and every control added to this
+ * panel is another thing to get wrong in an email going to eight hundred people.
+ */
+function EmailEditor({
+  company,
+  onSave,
+}: {
+  company: HubCompany;
+  onSave: (subject: string, body: readonly string[]) => void;
+}) {
+  const [subject, setSubject] = useState(company.campaignEmail.subject);
+  const [body, setBody] = useState<string[]>([...company.campaignEmail.body]);
+
+  const set = (index: number, value: string) =>
+    setBody((current) => current.map((p, i) => (i === index ? value : p)));
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label
+          htmlFor="campaign-subject"
+          className="mb-1 block text-[13px] font-semibold text-ink-soft"
+        >
+          Subject
+        </label>
+        <input
+          id="campaign-subject"
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          className="h-12 w-full rounded-chip border border-line-strong bg-surface px-3 text-[16px] text-ink lg:h-10 lg:text-[15px]"
+        />
+      </div>
+
+      {body.map((paragraph, i) => (
+        <div key={i}>
+          <label
+            htmlFor={`campaign-body-${i}`}
+            className="mb-1 block text-[13px] font-semibold text-ink-soft"
+          >
+            {i === 0 ? 'Opening line' : `Paragraph ${i + 1}`}
+          </label>
+          <textarea
+            id={`campaign-body-${i}`}
+            value={paragraph}
+            onChange={(e) => set(i, e.target.value)}
+            rows={i === 0 ? 2 : 3}
+            className="w-full rounded-chip border border-line-strong bg-surface p-3 text-[15px] text-ink"
+          />
+        </div>
+      ))}
+
+      <p className="text-[13px] text-ink-mute">
+        The unsubscribe line and the note saying we send on your behalf stay as they are.
+        They are what keeps the send legal.
+      </p>
+
+      <Button full onClick={() => onSave(subject, body)}>
+        Save the email
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Email campaign setup: two cards, one decision.
+ *
+ * A research probe, not a recommendation, and it must not read as one. Which option a
+ * firm will accept is genuinely unknown: the first needs nothing from them and ships
+ * immediately, the second authenticates as their own domain and protects their
  * reputation but needs someone who can edit DNS.
+ *
+ * THE DNS DETAIL IS BEHIND THE CARD, not next to it. It used to be a third card with
+ * an expander, which put a wall of record types in the middle of the story on a screen
+ * whose job is to sell the flow. A modal keeps it one click from the decision and zero
+ * clicks from everyone who does not care.
  *
  * ON THE WORDING. "Impersonation" is the objection this has to defuse, and it defuses
  * it by being accurate: the firm publishes a key in their own DNS, which is a grant of
@@ -88,7 +205,7 @@ export function EmailPreview({ company }: { company: HubCompany }) {
  */
 export function SenderLadder({ company }: { company: HubCompany }) {
   const { sender } = company;
-  const [showSetup, setShowSetup] = useState(false);
+  const [showDns, setShowDns] = useState(false);
   const onLumoDomain = sender.rung === 'lumo_domain';
 
   return (
@@ -97,40 +214,26 @@ export function SenderLadder({ company }: { company: HubCompany }) {
         active={onLumoDomain}
         title="Send from Lumo's domain"
         cost="Nothing to set up"
-        body={`Arrives as "${sender.displayName}", with replies coming back to you. Gmail and Outlook add a small "via ${sender.sendingDomain}" note under your name — most people never notice it, some do.`}
+        body={`Arrives as "${sender.displayName}", replies come back to you. Gmail and Outlook add a small "via ${sender.sendingDomain}" note under your name.`}
       />
+
       <Rung
         active={sender.rung === 'delegated_subdomain'}
         title="Send from your own domain"
-        cost="Two DNS records"
-        body="You publish two records we give you, on a subdomain of your own domain. The 'via' note disappears, the email authenticates as you rather than as us, and your main domain's reputation stays insulated from it. Ten minutes for whoever looks after your website."
+        cost="Requires DNS setup"
+        body="The via note disappears and the email authenticates as you. Two records on a subdomain of your own domain."
         verified={sender.delegationVerified}
+        onOpen={() => setShowDns(true)}
       />
 
-      {onLumoDomain ? (
-        <div className="rounded-card border border-line bg-surface">
-          <button
-            type="button"
-            onClick={() => setShowSetup((v) => !v)}
-            aria-expanded={showSetup}
-            className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
-          >
-            <span className="text-[13px] font-semibold text-ink">
-              What the DNS change involves
-            </span>
-            <span aria-hidden="true" className="shrink-0 text-[13px] text-ink-mute">
-              {showSetup ? 'Hide' : 'Show'}
-            </span>
-          </button>
-          {showSetup ? <DnsSetup company={company} /> : null}
-        </div>
-      ) : null}
-
       <p className="pt-1 text-[13px] text-ink-mute">
-        Either way you are the sender and we act on your instruction. The second option is
-        not us pretending to be you — it only works because you publish the key, which is
-        the same thing every company's newsletter does.
+        Either way you are the sender and we act on your instruction. The second is not us
+        pretending to be you: it only works because you publish the key.
       </p>
+
+      <Sheet open={showDns} title="Send from your own domain" onClose={() => setShowDns(false)}>
+        <DnsSetup company={company} />
+      </Sheet>
     </div>
   );
 }
@@ -138,15 +241,13 @@ export function SenderLadder({ company }: { company: HubCompany }) {
 /**
  * The actual records, because "just update your DNS" is not an instruction.
  *
- * This is written for the person who will really do it — whoever built the firm's
- * website, working from a forwarded email — not for the installer. Hence real record
- * types, a named subdomain, and an explicit note that the main domain is untouched,
- * which is the first thing any competent web person will want to know before they
- * agree to it.
+ * Written for the person who will really do it, whoever built the firm's website
+ * working from a forwarded email, not for the installer. Hence real record types, a
+ * named subdomain, and an explicit note that the main domain is untouched, which is
+ * the first thing any competent web person will want to know before they agree to it.
  *
- * Collapsed by default. On the founder demo this is a detail that proves the upgrade
- * path is real; expanded by default it would be a wall of DNS in the middle of the
- * story.
+ * The book-a-call route matters more than the records do. Most installers will not do
+ * this themselves and pretending otherwise is how the upgrade path stays theoretical.
  */
 function DnsSetup({ company }: { company: HubCompany }) {
   const bare = company.selfServeLinkToken;
@@ -155,38 +256,49 @@ function DnsSetup({ company }: { company: HubCompany }) {
   const records = [
     {
       type: 'CNAME',
-      host: `lumo.${bare}...co.uk`,
       value: 'dkim.lumopartners.co.uk',
-      why: 'Lets us sign mail with a key you have authorised. This is the part that makes it authenticate as you.',
+      why: 'Lets us sign mail with a key you have authorised. This is what makes it authenticate as you.',
     },
     {
       type: 'TXT',
-      host: `lumo.${bare}...co.uk`,
       value: 'v=spf1 include:lumopartners.co.uk ~all',
-      why: 'Tells inbox providers that our servers are allowed to send for that subdomain.',
+      why: 'Tells inbox providers our servers may send for that subdomain.',
     },
   ];
 
   return (
-    <div className="border-t border-line px-3 py-3">
-      <p className="text-[13px] leading-snug text-ink-soft">
-        Two records on <span className="font-semibold text-ink">{subdomain}</span> — a
-        subdomain we would use only for this. Your main domain is not touched, so your
-        normal email and your website carry on exactly as they are.
+    <div className="space-y-4">
+      <p className="text-[15px] leading-snug text-ink-soft">
+        Two records on <span className="font-semibold text-ink">{subdomain}</span>, a
+        subdomain we would use only for this. Your main domain is untouched, so your normal
+        email and website carry on exactly as they are.
       </p>
-      <ul className="mt-3 space-y-2">
+
+      <ul className="space-y-2">
         {records.map((record) => (
-          <li key={record.type} className="rounded-card bg-sunk px-3 py-2">
+          <li key={record.type} className="rounded-card border border-line bg-sunk px-3 py-2">
             <p className="text-[12px] font-semibold text-ink-soft">{record.type}</p>
             <p className="mt-0.5 break-all font-mono text-[12px] text-ink">{record.value}</p>
             <p className="mt-1 text-[12px] leading-snug text-ink-mute">{record.why}</p>
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-[13px] text-ink-mute">
-        We check them every few minutes and switch you over automatically once both are
-        live. Nothing changes for you in the meantime, and you can stay on Lumo's domain
-        indefinitely if you would rather not bother.
+
+      <div className="rounded-card border border-accent bg-accent-soft p-3">
+        <p className="text-[14px] font-semibold text-ink">Not your sort of thing?</p>
+        <p className="mt-1 text-[13px] text-ink-soft">
+          Book a call and we will do it with whoever looks after your website. Ten minutes.
+        </p>
+        <div className="mt-3">
+          <Button variant="secondary" small>
+            Book a call
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-[13px] text-ink-mute">
+        We check every few minutes and switch you over once both are live. Nothing changes in
+        the meantime, and staying on Lumo's domain is a perfectly good answer.
       </p>
     </div>
   );
@@ -198,20 +310,17 @@ function Rung({
   cost,
   body,
   verified,
+  onOpen,
 }: {
   active: boolean;
   title: string;
   cost: string;
   body: string;
   verified?: boolean;
+  onOpen?: () => void;
 }) {
-  return (
-    <div
-      className={[
-        'rounded-card border p-3',
-        active ? 'border-accent bg-accent-soft' : 'border-line bg-surface',
-      ].join(' ')}
-    >
+  const content = (
+    <>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <p className="text-[14px] font-bold text-ink">
           {title}
@@ -224,6 +333,23 @@ function Rung({
         <p className="text-[12px] font-semibold text-ink-mute">{cost}</p>
       </div>
       <p className="mt-1 text-[13px] leading-snug text-ink-soft">{body}</p>
-    </div>
+    </>
   );
+
+  const shell = [
+    'block w-full rounded-card border p-3 text-left',
+    active ? 'border-accent bg-accent-soft' : 'border-line bg-surface',
+    onOpen ? 'transition-colors duration-150 hover:border-line-strong hover:bg-sunk' : '',
+  ].join(' ');
+
+  if (onOpen) {
+    return (
+      <button type="button" onClick={onOpen} className={shell}>
+        {content}
+        <p className="mt-2 text-[12px] font-semibold text-accent">See what is involved</p>
+      </button>
+    );
+  }
+
+  return <div className={shell}>{content}</div>;
 }

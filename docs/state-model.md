@@ -1,4 +1,4 @@
-# Lumo Hub — state model and copy table
+# Lumo Hub, state model and copy table
 
 > **Generated from `src/state/` by `npm run state-table`. Do not edit by hand.**
 > Edit the source and re-run. `npm run check` fails when this file is stale.
@@ -22,19 +22,19 @@ What happened to the campaign email Lumo sends to the back-book, on the installe
 
 | State | Label the installer sees | What is blocking it | Whose job | Recommended action |
 |---|---|---|---|---|
-| `imported` | On your list | Loaded from your customer list. Lumo is still checking the details. | Lumo | — |
+| `imported` | On your list | Loaded from your customer list. Lumo is still checking the details. | Lumo | – |
 | `held_no_email` | No email address | Your list had no usable email for this household, so there is nobody for us to write to. Nothing else about the row is wrong. | You | Add the address if you have it anywhere. Each one you supply is another £50 on the table, and we cannot get it from anywhere but you. |
 | `held_unconfirmed` | Battery not confirmed | We cannot tell from your list whether this household actually has a battery. Sending to solar-only customers wastes the send and risks spam complaints that damage everyone's campaign. | You | Confirm whether they have storage. You are the only one who knows, and a wrong guess either way costs you. |
 | `awaiting_approval` | Ready to send | Cleaned, checked and ready. Waiting on you to approve the email we send on your behalf. | You | Approve the email once and every household on your list goes out. It is the only sign-off we will ask you for. |
-| `queued` | Sending | In the send queue. We deliberately ramp up slowly rather than sending your whole list at once, because a spike of complaints would get every campaign filtered. | Lumo | — |
-| `sent` | Email sent | — | Nobody | — |
-| `opened` | Opened it | — | Nobody | — |
+| `queued` | Sending | In the send queue. We deliberately ramp up slowly rather than sending your whole list at once, because a spike of complaints would get every campaign filtered. | Lumo | – |
+| `sent` | Email sent | – | Nobody | – |
+| `opened` | Opened it | – | Nobody | – |
 | `clicked` | Interested, not signed up | They clicked through and then stopped part-way. They are interested and something put them off. | You | The warmest leads on your list. A call from the firm that fitted their battery converts these far better than another email from a company they have never heard of. |
-| `signed_up` | Signed up | — | Nobody | — |
-| `bounced` | Email bounced | The address on your list is dead, so they never saw it. Common on a back-book — people change provider and move house. | You | A better address puts them straight back in the queue. Bounces also hurt our sending reputation, so this one helps the rest of your list too. |
-| `no_response` | No response | Delivered and never opened. Lumo will not email these again — repeatedly mailing people who ignore us is how a sending domain dies, and it would take the rest of your list down with it. | Nobody | — |
-| `unsubscribed` | Opted out | They asked not to be contacted again, so we will not, and neither should you. | Nobody | — |
-| `complained` | Marked as spam | They reported the email. Shown because it is honest and because it is the clearest signal that a list had addresses on it that should not have been there. | Nobody | — |
+| `signed_up` | Signed up | – | Nobody | – |
+| `bounced` | Email bounced | The address on your list is dead, so they never saw it. Common on a back-book, people change provider and move house. | You | A better address puts them straight back in the queue. Bounces also hurt our sending reputation, so this one helps the rest of your list too. |
+| `no_response` | No response | Delivered and never opened. Lumo will not email these again, repeatedly mailing people who ignore us is how a sending domain dies, and it would take the rest of your list down with it. | Nobody | – |
+| `unsubscribed` | Opted out | They asked not to be contacted again, so we will not, and neither should you. | Nobody | – |
+| `complained` | Marked as spam | They reported the email. Shown because it is honest and because it is the clearest signal that a list had addresses on it that should not have been there. | Nobody | – |
 
 Permitted transitions:
 
@@ -61,12 +61,12 @@ Where the household has got to on the Lumo platform. Ten of these eleven values 
 | `no_account` | Hasn't signed up yet | They haven't created a Lumo account. | You | Chase the invite. A call converts far better than a second email. |
 | `Not Linked` | Battery not connected | They have a Lumo account but haven't connected their inverter to it. | The household | Walk them through connecting the inverter in the app. This is the step people stall on. |
 | `Linked, No Tariff` | No tariff set | Their battery is connected, but Lumo doesn't know their energy tariff, so it can't work out when charging is cheap. | The household | They need to pick their tariff in the app. A minute, if they have a recent bill. |
-| `Setup Incomplete` | Not switched on yet | Connected and tariff set, but they have never turned Smart Control on, so it has never been tested. | The household | One toggle in the app. Worth a call — they are one tap from earning. |
-| `Smart Control Test Running` | Lumo is testing control | Lumo is checking it can actually control the battery. | Nobody | — |
+| `Setup Incomplete` | Not switched on yet | Connected and tariff set, but they have never turned Smart Control on, so it has never been tested. | The household | One toggle in the app. Worth a call, they are one tap from earning. |
+| `Smart Control Test Running` | Lumo is testing control | Lumo is checking it can actually control the battery. | Nobody | – |
 | `Smart Control Test Failed` | Lumo couldn't control the battery | Lumo sent commands and the battery didn't act on them. We're investigating. | Lumo | Nothing for you to do. Lumo will come back to you on this one. |
 | `Smart Control Check Incomplete` | Lumo's check didn't finish | Lumo's control check couldn't be completed, so we can't confirm control either way yet. Nothing here says the system is broken. | Lumo | Nothing for you to do. Lumo is looking at why the check didn't finish. |
 | `Smart Control Inactive` | Switched off by the household | Control was working, then they turned Smart Control off. | The household | Worth asking why. It is usually a worry about the battery being empty when they want it. |
-| `Smart Control Active` | Earning | — | Nobody | — |
+| `Smart Control Active` | Earning | – | Nobody | – |
 | `Needs Relink` | Connection dropped | Their inverter connection has expired and needs re-authorising. Lumo can't control the battery until it does. | The household | They need to reconnect in the app. Two taps, but nothing happens until they do it. |
 | `Device Disconnected` | Battery offline | The battery or inverter isn't reachable. Usually power, home broadband, or a router that has been replaced. | You | This is the one on this list you can actually fix. Check it's powered and back on the home network. |
 
@@ -90,9 +90,9 @@ Whether the household who signed up can be tied to the firm who installed their 
 
 | State | Label the installer sees | What is blocking it | Whose job | Recommended action |
 |---|---|---|---|---|
-| `matched_import` | Tied to you | — | Nobody | — |
-| `matched_manual` | Tied to you by hand | — | Nobody | — |
-| `unmatched_different_email` | On Lumo, not credited to you | They are on Lumo and running, but they came in on their own rather than through your campaign, so nothing ties them to you. Your £50 is not counted while this is open. | You | Confirm this is your customer and we will tie it to you. Do not re-add them — that just creates a duplicate and delays it further. |
+| `matched_import` | Tied to you | – | Nobody | – |
+| `matched_manual` | Tied to you by hand | – | Nobody | – |
+| `unmatched_different_email` | On Lumo, not credited to you | They are on Lumo and running, but they came in on their own rather than through your campaign, so nothing ties them to you. Your £50 is not counted while this is open. | You | Confirm this is your customer and we will tie it to you. Do not re-add them, that just creates a duplicate and delays it further. |
 | `ambiguous` | More than one possible match | More than one Lumo account could be this household, and we will not guess and risk crediting the wrong firm. | Lumo | Lumo will confirm which account is theirs. We may come back to you for a postcode. |
 
 Permitted transitions:
@@ -109,10 +109,10 @@ The installer's £50 per household, on 30 consecutive days of active control. Co
 | State | Label the installer sees | What is blocking it | Whose job | Recommended action |
 |---|---|---|---|---|
 | `not_eligible` | Not earning yet | Smart Control has never been active. The 30-day clock starts the first time it is. | Their setup | Clear the blocker on their setup and the clock starts on its own. |
-| `qualifying` | Qualifying | Smart Control has to stay active for 30 days in a row. | Nobody | — |
+| `qualifying` | Qualifying | Smart Control has to stay active for 30 days in a row. | Nobody | – |
 | `lapsed` | Clock reset | Control dropped before the 30 days were up, so the clock went back to zero. | Their setup | Fix the blocker on their setup. The 30 days restart from the day control comes back. |
-| `confirmed` | Confirmed | — | Lumo | Yours. Lumo pays confirmed rewards in the next monthly run. |
-| `paid` | Paid | — | Nobody | — |
+| `confirmed` | Confirmed | – | Lumo | Yours. Lumo pays confirmed rewards in the next monthly run. |
+| `paid` | Paid | – | Nobody | – |
 
 Permitted transitions:
 
@@ -173,7 +173,7 @@ that reports fiction.
 - **Blocks the real build:** yes
 - **States affected:** `imported`, `held_no_email`, `held_unconfirmed`, `awaiting_approval`
 - **Why it is missing:** There is no bulk ingestion path for installer-supplied households, and no concept of a row that was received but held back as unusable.
-- **What the real build must create:** An import batch entity recording who supplied it, when, how many rows arrived, and a per-row outcome — loaded, held for a missing address, held pending a battery confirmation, or rejected as a duplicate. The held outcomes matter most: they are the only work the product asks an installer to do, so they have to be a real queryable state rather than a spreadsheet a human at Lumo keeps.
+- **What the real build must create:** An import batch entity recording who supplied it, when, how many rows arrived, and a per-row outcome, loaded, held for a missing address, held pending a battery confirmation, or rejected as a duplicate. The held outcomes matter most: they are the only work the product asks an installer to do, so they have to be a real queryable state rather than a spreadsheet a human at Lumo keeps.
 - **Evidence:** Nothing in lumo-api, Firestore or the Hub ingests a list. The first imports will be done by hand by Lumo staff, which is the right call for the first few installers and precisely why the resulting rows still need a real home.
 
 ### A join between a contacted household and a Lumo account
@@ -197,7 +197,7 @@ that reports fiction.
 - **Blocks the real build:** yes
 - **States affected:** `awaiting_approval`, `queued`, `complained`
 - **Why it is missing:** Nothing records permission to contact a household, because nothing has ever contacted one.
-- **What the real build must create:** An attestation on the company account: who confirmed that their customers agreed to be contacted about products relating to their installation, when, and covering which import. It is the lawful basis for the whole campaign — Lumo sends as a processor on the installer’s instruction, relying on the installer’s own relationship with the household — so it needs to be an auditable record, not a checkbox whose value is discarded. It also protects the sending domain: a list without real permission generates the complaints that get every installer’s campaign filtered.
+- **What the real build must create:** An attestation on the company account: who confirmed that their customers agreed to be contacted about products relating to their installation, when, and covering which import. It is the lawful basis for the whole campaign, Lumo sends as a processor on the installer’s instruction, relying on the installer’s own relationship with the household, so it needs to be an auditable record, not a checkbox whose value is discarded. It also protects the sending domain: a list without real permission generates the complaints that get every installer’s campaign filtered.
 - **Evidence:** No consent or permission artefact exists in the estate for installer-sourced households. A data processing agreement per installer is the contractual half of this and is not a product feature, but nothing should send before both exist.
 
 ### Per-installer sender configuration
@@ -205,5 +205,5 @@ that reports fiction.
 - **Blocks the real build:** no
 - **States affected:** `awaiting_approval`, `queued`, `sent`
 - **Why it is missing:** All outbound mail today is Lumo-branded transactional email from a single domain. There is no notion of sending on another party’s behalf.
-- **What the real build must create:** A sender config per company: display name and reply-to at minimum, and optionally a verified sending subdomain the installer delegates by publishing DKIM and SPF records in their own DNS. The delegated form is authenticated and consented, which is what distinguishes it from spoofing — DMARC passes precisely because the domain owner published the key. Campaign mail must also leave from a domain entirely separate from the app’s transactional mail, so a bad list cannot take down password resets and control alerts with it.
+- **What the real build must create:** A sender config per company: display name and reply-to at minimum, and optionally a verified sending subdomain the installer delegates by publishing DKIM and SPF records in their own DNS. The delegated form is authenticated and consented, which is what distinguishes it from spoofing, DMARC passes precisely because the domain owner published the key. Campaign mail must also leave from a domain entirely separate from the app’s transactional mail, so a bad list cannot take down password resets and control alerts with it.
 - **Evidence:** The estate has one transactional sending identity and one template. Sending thousands of campaign emails from it would put every installer’s campaign and the app’s own mail behind the same reputation.

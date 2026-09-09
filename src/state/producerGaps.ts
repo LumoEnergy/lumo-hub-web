@@ -3,7 +3,7 @@
  *
  * This is a deliberate output, not a caveat. Designing these states here means the
  * real build knows up front that it has to create them, rather than discovering it
- * late and quietly shipping a screen that reports fiction — which is precisely what
+ * late and quietly shipping a screen that reports fiction, which is precisely what
  * the live Hub does today with its invite status.
  *
  * Do not remove an entry to make a screen simpler. If a gap closes, close it because
@@ -17,7 +17,7 @@
  *     attribution token. Lumo's customer is the firm; the firm decides internally
  *     whether an engineer gets a cut. What the platform still needs per person is an
  *     audit field ("who added this row"), because "which of my crews actually
- *     registers customers" is the most useful management view the Hub can offer —
+ *     registers customers" is the most useful management view the Hub can offer,
  *     but that is a column, not an identity to pay.
  *   - `campaign_lifecycle` replaced an invite gap. The unit is a list, not a
  *     household, and the missing producer is a real ESP integration with real
@@ -68,7 +68,7 @@ export const PRODUCER_GAPS: readonly ProducerGap[] = [
     whyMissing:
       'There is no bulk ingestion path for installer-supplied households, and no concept of a row that was received but held back as unusable.',
     whatTheRealBuildMustCreate:
-      'An import batch entity recording who supplied it, when, how many rows arrived, and a per-row outcome — loaded, held for a missing address, held pending a battery confirmation, or rejected as a duplicate. The held outcomes matter most: they are the only work the product asks an installer to do, so they have to be a real queryable state rather than a spreadsheet a human at Lumo keeps.',
+      'An import batch entity recording who supplied it, when, how many rows arrived, and a per-row outcome, loaded, held for a missing address, held pending a battery confirmation, or rejected as a duplicate. The held outcomes matter most: they are the only work the product asks an installer to do, so they have to be a real queryable state rather than a spreadsheet a human at Lumo keeps.',
     evidence:
       'Nothing in lumo-api, Firestore or the Hub ingests a list. The first imports will be done by hand by Lumo staff, which is the right call for the first few installers and precisely why the resulting rows still need a real home.',
     blocksRealBuild: true,
@@ -111,7 +111,7 @@ export const PRODUCER_GAPS: readonly ProducerGap[] = [
     whyMissing:
       'Nothing records permission to contact a household, because nothing has ever contacted one.',
     whatTheRealBuildMustCreate:
-      'An attestation on the company account: who confirmed that their customers agreed to be contacted about products relating to their installation, when, and covering which import. It is the lawful basis for the whole campaign — Lumo sends as a processor on the installer’s instruction, relying on the installer’s own relationship with the household — so it needs to be an auditable record, not a checkbox whose value is discarded. It also protects the sending domain: a list without real permission generates the complaints that get every installer’s campaign filtered.',
+      'An attestation on the company account: who confirmed that their customers agreed to be contacted about products relating to their installation, when, and covering which import. It is the lawful basis for the whole campaign, Lumo sends as a processor on the installer’s instruction, relying on the installer’s own relationship with the household, so it needs to be an auditable record, not a checkbox whose value is discarded. It also protects the sending domain: a list without real permission generates the complaints that get every installer’s campaign filtered.',
     evidence:
       'No consent or permission artefact exists in the estate for installer-sourced households. A data processing agreement per installer is the contractual half of this and is not a product feature, but nothing should send before both exist.',
     blocksRealBuild: true,
@@ -123,7 +123,7 @@ export const PRODUCER_GAPS: readonly ProducerGap[] = [
     whyMissing:
       'All outbound mail today is Lumo-branded transactional email from a single domain. There is no notion of sending on another party’s behalf.',
     whatTheRealBuildMustCreate:
-      'A sender config per company: display name and reply-to at minimum, and optionally a verified sending subdomain the installer delegates by publishing DKIM and SPF records in their own DNS. The delegated form is authenticated and consented, which is what distinguishes it from spoofing — DMARC passes precisely because the domain owner published the key. Campaign mail must also leave from a domain entirely separate from the app’s transactional mail, so a bad list cannot take down password resets and control alerts with it.',
+      'A sender config per company: display name and reply-to at minimum, and optionally a verified sending subdomain the installer delegates by publishing DKIM and SPF records in their own DNS. The delegated form is authenticated and consented, which is what distinguishes it from spoofing, DMARC passes precisely because the domain owner published the key. Campaign mail must also leave from a domain entirely separate from the app’s transactional mail, so a bad list cannot take down password resets and control alerts with it.',
     evidence:
       'The estate has one transactional sending identity and one template. Sending thousands of campaign emails from it would put every installer’s campaign and the app’s own mail behind the same reputation.',
     blocksRealBuild: false,

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 /**
  * One overlay: a bottom sheet on a phone, a centred dialog on a laptop. The spec
- * forbids a second overlay pattern — a tool with two kinds of modal teaches nothing
+ * forbids a second overlay pattern, a tool with two kinds of modal teaches nothing
  * consistent about how to dismiss things.
  *
  * The responsive switch is presentation only. Anchoring to the bottom edge is right

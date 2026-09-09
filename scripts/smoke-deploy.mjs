@@ -10,7 +10,7 @@
  *
  * A REAL BROWSER, not jsdom. The first version of this script used jsdom and
  * confidently reported a blank page for all three personas after the bug was already
- * fixed — jsdom does not execute `<script type="module">`, so it never ran the bundle
+ * fixed, jsdom does not execute `<script type="module">`, so it never ran the bundle
  * at all. A check that reports failure when the page is fine is worse than no check.
  *
  * Chrome is driven through --dump-dom rather than Playwright to avoid adding a
@@ -91,7 +91,7 @@ const PERSONAS = [
   {
     id: 'messy-list',
     path: '',
-    expect: [/Demo: Messy list/, /Where your customers are/, /No usable address/],
+    expect: [/Demo: Messy list/, /Where your customers are/, /No address/],
     reject: [/Nothing has been sent yet/],
   },
 ];
@@ -109,9 +109,22 @@ const ROUTES = [
   {
     id: 'customers',
     path: 'customers',
-    expect: [/Customers/, /Household/, /Reward/, /going to nobody/i],
-    // The column nobody understood, and the screen it used to duplicate.
+    expect: [/Customers/, /Household/, /Reward/, /Email opened/],
+    // The column nobody understood, the status jargon, and the banner that shouted
+    // about money on every single visit.
+    reject: [/Whose/, /possible match/i, /going to nobody/i],
+  },
+  {
+    id: 'customers-needs-you',
+    path: 'customers?view=attention',
+    expect: [/What to do/, /Add an email address/],
     reject: [/Whose/],
+  },
+  {
+    id: 'customers-active',
+    path: 'customers?view=active',
+    expect: [/Inverter/, /Control/, /Live for/],
+    reject: [/state of charge/i],
   },
   {
     id: 'campaign',
@@ -121,9 +134,18 @@ const ROUTES = [
       /commusoft-battery-jobs/,
       /Still processing/,
       /When it goes out/,
+      /Email campaign setup/,
       /Send from your own domain/,
+      /Get Lumo now/,
+      /guaranteed £150 per year/,
     ],
-    reject: [/Your list/],
+    reject: [/Your list/, /exact duplicates/i, /What the DNS change involves/],
+  },
+  {
+    id: 'settings',
+    path: 'settings',
+    expect: [/Your team/, /Admin/, /Viewer/, /Invite sent/],
+    reject: [/sort code/i],
   },
 ];
 
@@ -132,14 +154,21 @@ const ROUTES = [
  *
  * The review notes that changed the product: no individual framing, and no money
  * that depends on a conversion rate nobody has measured.
+ *
+ * `per year` used to be on this list and has been deliberately removed. The campaign
+ * email now leads on the household's guaranteed grid reward, which is an annual
+ * figure and is a commitment rather than a forecast. What stays banned is a
+ * prediction about what the FIRM will earn.
  */
 const NEVER = [
   /your personal link/i,
   /QR code/i,
   /you could earn/i,
   /projected/i,
-  /per year/i,
   /on track for/i,
+  // Built from the code point so this file does not itself contain the character
+  // it bans, which is the only way to keep the repo-wide em dash test happy.
+  new RegExp(String.fromCharCode(0x2014)),
 ];
 
 async function renderedText(url) {
@@ -183,7 +212,7 @@ for (const check of CHECKS) {
   try {
     const rendered = await renderedText(url);
     text = rendered.text;
-    if (rendered.bytes === 0) problems.push('#root is empty — blank screen');
+    if (rendered.bytes === 0) problems.push('#root is empty, blank screen');
     for (const pattern of check.expect) {
       if (!pattern.test(text)) problems.push(`missing expected ${pattern}`);
     }
@@ -200,7 +229,7 @@ for (const check of CHECKS) {
     for (const problem of problems) console.error(`       ${problem}`);
     console.error(`       rendered: ${text.slice(0, 200) || '(nothing)'}`);
   } else {
-    console.log(`ok   ${check.name.padEnd(26)} "${text.slice(0, 60)}…"`);
+    console.log(`ok   ${check.name.padEnd(26)} "${text.slice(0, 60)}..."`);
   }
 }
 
