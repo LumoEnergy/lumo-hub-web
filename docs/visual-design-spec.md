@@ -137,12 +137,18 @@ attention queue and had **two** tabs that were both lists of the same households
 progress, one for money. The reader had to hold both in their head and reconcile them, and
 the first screen anyone saw described admin rather than a campaign.
 
-- **Dashboard.** Money hero (or the approval callout, before anything has sent) then a
-  two-column grid: the funnel with its drop-outs on the left, and live customers, sending
-  and what needs you stacked on the right, **in that order**. Live customers sits directly
-  under the funnel's eyeline because it is the proof that Lumo keeps working after signup,
-  which is the thing an installer doubts; sending is mechanism and goes below it. Answers
-  *is this working?*
+- **Dashboard.** Money hero (or the approval callout, before anything has sent) then **four
+  panels in a 2x2**: the funnel with its drop-outs, live customers, sending, what needs you.
+  Grid fills across before down, so that is also the reading order. Live customers sits on
+  the funnel's eyeline because it is the proof that Lumo keeps working after signup, which
+  is the thing an installer doubts; sending is mechanism and drops to the second row.
+  Answers *is this working?*
+
+  **It was one panel beside a stack of three, and that is the version to avoid.** The stack
+  ran about two panels taller than the funnel, so the screen was visibly bottom-right
+  weighted with a column of dead space under the drop-outs. Balance here is not decoration:
+  an unbalanced two-column layout reads as an unfinished screen, and this is the first thing
+  a founder sees.
 - **Customers.** Four views over one list (below), each with its own columns. No callouts.
   Answers *who, and how much?*
 - **Campaign.** File records with what became of every row → the email, editable, and its one

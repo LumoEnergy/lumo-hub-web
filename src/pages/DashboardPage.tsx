@@ -59,9 +59,20 @@ export function DashboardPage() {
         )}
 
         {/*
-          `items-start` matters: the default stretches the funnel panel to the height of the
-          three stacked panels beside it, which left about 300px of empty card under the
-          drop-outs and read as a rendering fault rather than as breathing room.
+          FOUR PANELS IN A 2x2, NOT ONE PANEL BESIDE A STACK OF THREE.
+
+          The stack was taller than the funnel by about the height of two panels, so the
+          screen was visibly bottom-right weighted with a column of dead space under the
+          drop-outs. Laying all four out in one grid balances the columns and, because
+          grid fills across before down, the reading order stays the intended one:
+          funnel, live customers, sending, waiting on you.
+
+          `items-start` stops a short panel being stretched to its row-mate's height,
+          which is what made the funnel look like a rendering fault in the first place.
+
+          The panels are conditional, and that is fine here. When a persona has no live
+          customers the later panels flow up into the gap rather than leaving a hole,
+          which is the one thing a flat grid does better than nested columns.
         */}
         <div className="grid items-start gap-4 xl:grid-cols-[1.35fr_1fr]">
           <Panel
@@ -83,67 +94,65 @@ export function DashboardPage() {
             ) : null}
           </Panel>
 
-          <div className="space-y-4">
-            {/* The monitoring proof. Once a household is live the Hub has something
-                to watch, and this is the smallest honest demonstration of it: no
-                energy data, because there is none, but real control health. */}
-            {fleet.signedUp > 0 ? (
-              <Panel title="Live customers" meta={`${fleet.signedUp} on Lumo`}>
-                <FleetStrip fleet={fleet} />
-                <div className="mt-4">
-                  <Link
-                    to="customers?view=active"
-                    className="text-[13px] font-semibold text-accent hover:underline"
-                  >
-                    Monitor them
-                  </Link>
-                </div>
-              </Panel>
-            ) : null}
-
-            <Panel
-              title="Sending"
-              meta={
-                progress.awaitingApproval
-                  ? `${company.dailySendCap} a day once approved`
-                  : progress.daysRemaining > 0
-                    ? `${progress.scheduled.toLocaleString('en-GB')} still to go`
-                    : 'All sent'
-              }
-            >
-              {progress.total === 0 ? (
-                <p className="text-[14px] text-ink-soft">
-                  Nothing to schedule yet. We build it when your list is loaded.
-                </p>
-              ) : (
-                <>
-                  <SendSchedule company={company} progress={progress} compact />
-                  <p className="mt-3 text-[13px] text-ink-mute">
-                    {progress.daysRemaining > 0
-                      ? `${company.dailySendCap} a day, not all at once, so inbox providers keep trusting your list.`
-                      : 'Your whole list has been emailed.'}{' '}
-                    <Link to="campaign" className="font-semibold text-accent hover:underline">
-                      Manage sending
-                    </Link>
-                  </p>
-                </>
-              )}
+          {/* The monitoring proof. Once a household is live the Hub has something to
+              watch, and this is the smallest honest demonstration of it: no energy
+              data, because there is none, but real control health. */}
+          {fleet.signedUp > 0 ? (
+            <Panel title="Live customers" meta={`${fleet.signedUp} on Lumo`}>
+              <FleetStrip fleet={fleet} />
+              <div className="mt-4">
+                <Link
+                  to="customers?view=active"
+                  className="text-[13px] font-semibold text-accent hover:underline"
+                >
+                  Monitor them
+                </Link>
+              </div>
             </Panel>
+          ) : null}
 
-            {attention > 0 ? (
-              <Panel title="Waiting on you" meta={`${attention} households`}>
-                <p className="text-[14px] leading-snug text-ink-soft">
-                  A missing address, a bounce, a battery we cannot confirm, or someone who
-                  clicked and stopped. Everything else is running.
-                </p>
-                <div className="mt-3">
-                  <Link to="customers?view=attention">
-                    <Button variant="secondary">See what needs you</Button>
+          <Panel
+            title="Sending"
+            meta={
+              progress.awaitingApproval
+                ? `${company.dailySendCap} a day once approved`
+                : progress.daysRemaining > 0
+                  ? `${progress.scheduled.toLocaleString('en-GB')} still to go`
+                  : 'All sent'
+            }
+          >
+            {progress.total === 0 ? (
+              <p className="text-[14px] text-ink-soft">
+                Nothing to schedule yet. We build it when your list is loaded.
+              </p>
+            ) : (
+              <>
+                <SendSchedule company={company} progress={progress} compact />
+                <p className="mt-3 text-[13px] text-ink-mute">
+                  {progress.daysRemaining > 0
+                    ? `${company.dailySendCap} a day, not all at once, so inbox providers keep trusting your list.`
+                    : 'Your whole list has been emailed.'}{' '}
+                  <Link to="campaign" className="font-semibold text-accent hover:underline">
+                    Manage sending
                   </Link>
-                </div>
-              </Panel>
-            ) : null}
-          </div>
+                </p>
+              </>
+            )}
+          </Panel>
+
+          {attention > 0 ? (
+            <Panel title="Waiting on you" meta={`${attention} households`}>
+              <p className="text-[14px] leading-snug text-ink-soft">
+                A missing address, a bounce, a battery we cannot confirm, or someone who
+                clicked and stopped. Everything else is running.
+              </p>
+              <div className="mt-3">
+                <Link to="customers?view=attention">
+                  <Button variant="secondary">See what needs you</Button>
+                </Link>
+              </div>
+            </Panel>
+          ) : null}
         </div>
 
         <p className="pb-2 text-[13px] text-ink-mute">
