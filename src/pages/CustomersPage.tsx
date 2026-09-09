@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useDemoStore } from '../store/DemoStore';
 import { buildRows, sortRows } from '../selectors/customers';
 import type { CustomerRow, SortDirection, SortKey } from '../selectors/customers';
-import { VIEWS, isViewId, rowsForView, scheduledSendDates } from '../selectors/views';
+import { DEFAULT_VIEW, VIEWS, isViewId, rowsForView, scheduledSendDates } from '../selectors/views';
 import type { ViewId } from '../selectors/views';
 import { displayName } from '../fixtures';
 import { REWARD_GBP } from '../state';
@@ -55,7 +55,7 @@ export function CustomersPage() {
   // The view lives in the URL so the dashboard can link straight to it, and so a
   // filtered view is a thing you can send to a colleague.
   const raw = params.get('view');
-  const view: ViewId = isViewId(raw) ? raw : 'all';
+  const view: ViewId = isViewId(raw) ? raw : DEFAULT_VIEW;
 
   const rows = useMemo(() => buildRows(customers, asOf), [customers, asOf]);
   const context = useMemo(() => ({ scheduled: scheduledSendDates(rows, company) }), [rows, company]);
@@ -65,7 +65,7 @@ export function CustomersPage() {
 
   const setView = (next: ViewId) => {
     setLimit(PAGE);
-    if (next === 'all') params.delete('view');
+    if (next === DEFAULT_VIEW) params.delete('view');
     else params.set('view', next);
     setParams(params, { replace: true });
   };
@@ -124,7 +124,7 @@ export function CustomersPage() {
 
       {sorted.length === 0 ? (
         <div className="mt-3">
-          <EmptyForView view={view} onShowAll={() => setView('all')} />
+          <EmptyForView view={view} onShowInvited={() => setView(DEFAULT_VIEW)} />
         </div>
       ) : (
         <>
@@ -197,12 +197,8 @@ function Detail({ row, onDone }: { row: CustomerRow; onDone: () => void }) {
   );
 }
 
-function EmptyForView({ view, onShowAll }: { view: ViewId; onShowAll: () => void }) {
+function EmptyForView({ view, onShowInvited }: { view: ViewId; onShowInvited: () => void }) {
   const copy: Record<ViewId, { title: string; body: string }> = {
-    all: {
-      title: 'No customers yet',
-      body: 'Hand over a list and every household lands here.',
-    },
     invited: {
       title: 'Nothing sent yet',
       body: 'Approve the email on the Campaign tab and the first batch goes out.',
@@ -226,9 +222,11 @@ function EmptyForView({ view, onShowAll }: { view: ViewId; onShowAll: () => void
       title={copy[view].title}
       body={copy[view].body}
       action={
-        view === 'all' ? undefined : (
-          <Button variant="secondary" onClick={onShowAll}>
-            See all customers
+        // Invited is the default view, so offering a route to it from itself is a
+        // button that appears to do nothing.
+        view === 'invited' ? undefined : (
+          <Button variant="secondary" onClick={onShowInvited}>
+            See who we emailed
           </Button>
         )
       }

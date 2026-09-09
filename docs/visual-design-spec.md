@@ -138,9 +138,12 @@ progress, one for money. The reader had to hold both in their head and reconcile
 the first screen anyone saw described admin rather than a campaign.
 
 - **Dashboard.** Money hero (or the approval callout, before anything has sent) then a
-  two-column grid: the funnel with its drop-outs on the left, and sending, live customers
-  and what needs you stacked on the right. Answers *is this working?*
-- **Customers.** Five views over one list (below), each with its own columns. No callouts.
+  two-column grid: the funnel with its drop-outs on the left, and live customers, sending
+  and what needs you stacked on the right, **in that order**. Live customers sits directly
+  under the funnel's eyeline because it is the proof that Lumo keeps working after signup,
+  which is the thing an installer doubts; sending is mechanism and goes below it. Answers
+  *is this working?*
+- **Customers.** Four views over one list (below), each with its own columns. No callouts.
   Answers *who, and how much?*
 - **Campaign.** File records with what became of every row → the email, editable, and its one
   sign-off → the send schedule and its daily rate → email campaign setup → permission → the
@@ -150,9 +153,9 @@ the first screen anyone saw described admin rather than a campaign.
 **Renamed from "Your list"**, which read as a page about people while a sibling tab
 genuinely was the list of people.
 
-### The five views of the customer list
+### The four views of the customer list
 
-Five, because these are five questions a firm arrives with, not one list filtered five
+Four, because these are four questions a firm arrives with, not one list filtered four
 ways. **Each view gets its own columns**, and that is the change that makes the screen
 usable: a campaign row wants a status and a date, a live household wants its kit, its
 control health and its reward clock. One column set covering both leaves every row with
@@ -160,11 +163,25 @@ four empty cells.
 
 | View | Question | Columns |
 |---|---|---|
-| All | Where is everyone? | Household, Status, Waiting, Reward |
-| Invited | What did the ones we emailed do? | Household, Status, Emailed, Reward |
+| Invited (default) | What did the ones we emailed do? | Household, Status, Emailed, Reward |
 | Not yet contacted | When does the rest go out? | Household, Status, Scheduled send |
 | Needs you | What can only I do? | Household, Status, Waiting, What to do |
 | Active | How are my live customers? | Household, Battery, Inverter, Control, Live for, Reward |
+
+**There is no All, and the screen opens on Invited.** An 808-row undifferentiated list is
+the least useful thing this screen can show: it is the whole book averaged into one scroll,
+sorted so that the 322 households nothing has happened to yet were the first thing anybody
+saw. Invited is where the campaign actually is.
+
+**Removing it moved an invariant out of the UI.** All was the one view guaranteed to contain
+everybody, so reachability now depends on `EMAILED_STATES` and `WAITING_STATES` partitioning
+all thirteen contact states with no overlap and no gap. That is asserted in a test, because
+a fourteenth state added and not filed would silently strand households in a view nobody can
+open, and nothing on screen would look wrong.
+
+**The screen title still counts the whole book**, 808, and the two campaign tabs sum to it.
+That is the one place the total belongs: it is what the firm handed over, the subtitle says
+so, and no tab claims the same number.
 
 **Needs you is exactly four jobs, plus the money going nowhere.** No email address, a
 bounce, an unconfirmed battery, and a click that has gone cold after seven days. Plus
@@ -200,8 +217,15 @@ the firm.**
 ### The funnel
 
 Five stages, narrowing: on your list → emailed → opened → signed up → earning. Hand-rolled
-CSS bars, centred so the shape itself reads as a funnel before anything is read. No charting
-library in a disposable prototype.
+CSS bars, **left-aligned**. No charting library in a disposable prototype.
+
+**Centred bars were tried and reverted.** The argument for them was that a symmetrical taper
+is the shape everybody recognises from a funnel diagram, so it would be understood before it
+was read. In practice it cost more than it bought: with a shared left edge the eye compares
+five bar ends against one datum, and centring replaces that with two moving edges and no
+datum. The narrow stages at the bottom, which are the ones carrying the interesting numbers,
+became the hardest to compare. A recognisable silhouette is worth less than a readable
+comparison.
 
 - **Five stages, not six.** A Delivered stage sat between Emailed and Opened whose only
   content was the bounce count. A sixth bar earned less than the second it cost to read, and
@@ -340,7 +364,7 @@ be a disposable shell around two durable modules.
 - `StatusChip`, `AgeChip`. **No owner chip**, see the forbidden list.
 - `Sheet`, bottom sheet on mobile, centred dialog on desktop. One implementation, and it
   carries the DNS instructions, the email editor and the row detail.
-- `SegmentedToggle`, the five views. Toggle buttons with `aria-pressed`, **not**
+- `SegmentedToggle`, the four views. Toggle buttons with `aria-pressed`, **not**
   `role="tablist"`: tabs promise a panel each, and these press in and out over one list that
   stays put.
 - `Funnel`, `DropOuts`, `FleetStrip`, `SendSchedule`.
@@ -543,7 +567,7 @@ did something rather than teleporting.
 Three destinations plus an account area, no nesting, no back-stack except sheets and dialogs.
 
 - **Dashboard**, the default, and where anyone lands. Is this working?
-- **Customers**, one list, five views, status and money together. Who, and how much?
+- **Customers**, one list, four views, status and money together. Who, and how much?
 - **Campaign**, the files, the email, the schedule, the sender, the permission, and adding a
   household. What goes out, when, from whom?
 - **Account**, off the identity block rather than the main nav. The team and their roles.
@@ -584,17 +608,17 @@ shared installer token set is a decision to take then, with the research behind 
    view might prefer the brand green as decoration only, with a neutral accent.
 2. Whether the held rows should be fixable inline in the table or in a dedicated flow. A
    dedicated flow tests better; inline is what someone with 41 of them would want.
-3. Whether `no_response` should be visible in the default view at all. Showing it is honest
-   and shows the campaign's true shape; hiding it makes the screen look better than the
-   channel is. Currently shown under `All`, absent from `Needs you`.
-4. Whether `Invited` and `Not yet contacted` earn two tabs. Five views is at the limit, and
-   these two are one dimension split in half. Merging them would need a sent-or-scheduled
-   column that is a date in one case and a status in the other, which is why they are
-   separate today.
-5. Whether the seven-day stale-click threshold is right. It decides the size of the only
+3. Whether `no_response` should dominate the default view. It is 320 of Northfield's 486
+   invited households, so `Invited` is mostly silence, which is the honest shape of the
+   channel and also the least encouraging thing to open on. Currently shown.
+4. Whether the seven-day stale-click threshold is right. It decides the size of the only
    list in the product that asks a firm to pick up the phone: too short and it fills with
    people still deciding, too long and the lead is cold before it appears.
+5. Whether the whole-book total belongs in the screen title now that no tab shows it. It is
+   what the firm handed over and the two campaign tabs sum to it, but a reader who only
+   looks at the tabs never sees 808 anywhere except the funnel.
 
-**Resolved since the last revision.** The campaign email is editable (was open question 3).
-The "need you" summary is a count, not money at stake (was 2), and it now comes from the
-same predicate as the view it links to.
+**Resolved since the last revision.** The campaign email is editable. The "need you"
+summary is a count rather than money at stake, and comes from the same predicate as the
+view it links to. `All` is gone, which also settles whether `Invited` and `Not yet
+contacted` earn separate tabs: they are now the only two campaign views, so they must.

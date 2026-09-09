@@ -1,14 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { loadPersona } from '../../fixtures';
+import { loadPersona, PERSONA_IDS } from '../../fixtures';
 import type { PersonaId } from '../../fixtures';
-import { REWARD_GBP } from '../../state';
+import { CONTACT_STATE_IDS, REWARD_GBP } from '../../state';
 import {
   buildRows,
   earningsSummary,
   moneyPosition,
   sortRows,
 } from '../customers';
-import { STALE_CLICK_DAYS, needsYou, rowsForView, scheduledSendDates } from '../views';
+import {
+  EMAILED_STATES,
+  STALE_CLICK_DAYS,
+  WAITING_STATES,
+  needsYou,
+  rowsForView,
+  scheduledSendDates,
+} from '../views';
 
 const TODAY = new Date('2026-09-08T00:00:00Z');
 
@@ -99,11 +106,40 @@ describe('what needs the firm, one household at a time', () => {
   });
 });
 
-describe('the five views', () => {
+describe('the four views', () => {
   const rows = rowsFor('mid-campaign');
 
-  it('puts every household in All and nowhere near all of them anywhere else', () => {
-    expect(rowsForView(rows, 'all').length).toBe(rows.length);
+  /**
+   * THE INVARIANT THAT REPLACED THE "ALL" TAB.
+   *
+   * Dropping All removed the one view guaranteed to contain everybody, so reachability
+   * is now a property of the state partition rather than a safety net in the UI. If
+   * somebody adds a fourteenth contact state and forgets to file it, this fails rather
+   * than a household silently disappearing from every view on the screen.
+   */
+  it('files every contact state under exactly one of invited or not yet contacted', () => {
+    const emailed = new Set<string>(EMAILED_STATES);
+    const waiting = new Set<string>(WAITING_STATES);
+
+    for (const state of CONTACT_STATE_IDS) {
+      const membership = [emailed.has(state), waiting.has(state)].filter(Boolean).length;
+      expect(membership, `${state} must be in exactly one`).toBe(1);
+    }
+    expect(emailed.size + waiting.size).toBe(CONTACT_STATE_IDS.length);
+  });
+
+  it('reaches every household through the two campaign views', () => {
+    for (const persona of PERSONA_IDS) {
+      const all = rowsFor(persona);
+      const reachable = new Set([
+        ...rowsForView(all, 'invited').map((r) => r.customer.id),
+        ...rowsForView(all, 'waiting').map((r) => r.customer.id),
+      ]);
+      expect(reachable.size, persona).toBe(all.length);
+    }
+  });
+
+  it('keeps every view a proper subset, now that none of them is everybody', () => {
     for (const view of ['invited', 'waiting', 'attention', 'active'] as const) {
       expect(rowsForView(rows, view).length, view).toBeLessThan(rows.length);
     }

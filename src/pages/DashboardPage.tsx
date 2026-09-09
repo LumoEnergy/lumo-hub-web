@@ -84,6 +84,23 @@ export function DashboardPage() {
           </Panel>
 
           <div className="space-y-4">
+            {/* The monitoring proof. Once a household is live the Hub has something
+                to watch, and this is the smallest honest demonstration of it: no
+                energy data, because there is none, but real control health. */}
+            {fleet.signedUp > 0 ? (
+              <Panel title="Live customers" meta={`${fleet.signedUp} on Lumo`}>
+                <FleetStrip fleet={fleet} />
+                <div className="mt-4">
+                  <Link
+                    to="customers?view=active"
+                    className="text-[13px] font-semibold text-accent hover:underline"
+                  >
+                    Monitor them
+                  </Link>
+                </div>
+              </Panel>
+            ) : null}
+
             <Panel
               title="Sending"
               meta={
@@ -112,23 +129,6 @@ export function DashboardPage() {
                 </>
               )}
             </Panel>
-
-            {/* The monitoring proof. Once a household is live the Hub has something
-                to watch, and this is the smallest honest demonstration of it: no
-                energy data, because there is none, but real control health. */}
-            {fleet.signedUp > 0 ? (
-              <Panel title="Live customers" meta={`${fleet.signedUp} on Lumo`}>
-                <FleetStrip fleet={fleet} />
-                <div className="mt-4">
-                  <Link
-                    to="customers?view=active"
-                    className="text-[13px] font-semibold text-accent hover:underline"
-                  >
-                    Monitor them
-                  </Link>
-                </div>
-              </Panel>
-            ) : null}
 
             {attention > 0 ? (
               <Panel title="Waiting on you" meta={`${attention} households`}>

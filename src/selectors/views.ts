@@ -3,19 +3,32 @@ import type { ContactStateId } from '../state';
 import type { CustomerRow } from './customers';
 
 /**
- * FIVE VIEWS OF ONE LIST, each answering a different question.
+ * FOUR VIEWS OF ONE LIST, each answering a different question.
  *
  * The previous four filters were a workload cut: all, needs you, earning, not
- * emailed. That is one question asked four ways. These are five separate questions a
- * firm actually arrives with, and because each has a different question it gets a
+ * emailed. That is one question asked four ways. These are separate questions a firm
+ * actually arrives with, and because each has a different question it gets a
  * different set of columns rather than the same table filtered.
  *
  * That is the change that makes the screen usable. A campaign row wants a status and
  * a date; a live household wants its kit, its control health and its reward clock.
  * One column set covering both means every row carries four empty cells.
+ *
+ * THERE IS NO "ALL", AND IT OPENS ON INVITED. An 808-row undifferentiated list is the
+ * least useful thing this screen can show: it is the state of the whole book averaged
+ * into one scroll, and it opened on 322 households nothing has happened to yet.
+ * Invited is where the campaign actually is.
+ *
+ * Nothing becomes unreachable. `EMAILED_STATES` and `WAITING_STATES` partition all
+ * thirteen contact states between Invited and Not yet contacted, with no overlap and
+ * no gap, and `views.test.ts` asserts exactly that so a new contact state cannot
+ * quietly strand a household in a view nobody can open.
  */
 
-export type ViewId = 'all' | 'invited' | 'waiting' | 'attention' | 'active';
+export type ViewId = 'invited' | 'waiting' | 'attention' | 'active';
+
+/** Opened when no view is named. Invited, not the whole book. */
+export const DEFAULT_VIEW: ViewId = 'invited';
 
 export interface ViewDefinition {
   readonly id: ViewId;
@@ -25,7 +38,6 @@ export interface ViewDefinition {
 }
 
 export const VIEWS: readonly ViewDefinition[] = [
-  { id: 'all', label: 'All', blurb: 'Everyone on your list and where they have got to.' },
   { id: 'invited', label: 'Invited', blurb: 'Households we have emailed, and what they did.' },
   {
     id: 'waiting',
@@ -49,7 +61,7 @@ export const EMAILED_STATES: readonly ContactStateId[] = [
 ];
 
 /** Loaded but not sent to, for either reason. */
-const WAITING_STATES: readonly ContactStateId[] = [
+export const WAITING_STATES: readonly ContactStateId[] = [
   'imported',
   'awaiting_approval',
   'queued',
@@ -104,10 +116,6 @@ export function rowsForView(
   view: ViewId,
 ): readonly CustomerRow[] {
   switch (view) {
-    case 'invited':
-      return rows.filter((row) =>
-        (EMAILED_STATES as readonly string[]).includes(row.customer.contact),
-      );
     case 'waiting':
       return rows.filter((row) =>
         (WAITING_STATES as readonly string[]).includes(row.customer.contact),
@@ -118,8 +126,11 @@ export function rowsForView(
       // Live on Lumo, including the ones that are not working. A monitoring view
       // that hides the broken ones is a monitoring view nobody can use.
       return rows.filter((row) => row.customer.contact === 'signed_up');
+    case 'invited':
     default:
-      return rows;
+      return rows.filter((row) =>
+        (EMAILED_STATES as readonly string[]).includes(row.customer.contact),
+      );
   }
 }
 

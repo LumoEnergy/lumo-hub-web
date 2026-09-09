@@ -2,12 +2,16 @@ import type { FleetHealth, Journey, StageId } from '../selectors/journey';
 import { pct } from '../selectors/journey';
 
 /**
- * The funnel, drawn as a funnel.
+ * The funnel, as a left-aligned bar chart.
  *
- * The first version was left-aligned bars with a sentence under each one. It was
- * accurate and it read as a report. Centring the bars gives the shape people already
- * know from every funnel they have ever seen, which means it is understood before it
- * is read, and dropping the prose leaves a label, a count and a drop-off.
+ * Centred bars were tried, on the reasoning that a symmetrical taper is the shape
+ * everybody recognises from a funnel diagram. In practice it cost more than it
+ * bought: with a shared left edge the eye compares five bar ends against one datum,
+ * and centring gives it two moving edges and no datum at all. The narrow stages at
+ * the bottom, which are the interesting ones, became hardest to compare.
+ *
+ * The prose went at the same time as the centring. It was a label, a sentence and a
+ * percentage per stage on a panel whose whole job is to be glanced at.
  *
  * COLOUR CARRIES THE STAGE. Grey for the list, blue once an email has gone, teal
  * once somebody has engaged, green once money is involved. The status chips in the
@@ -53,13 +57,12 @@ export function Funnel({ journey }: { journey: Journey }) {
               {stage.label}
             </span>
 
-            <span className="flex flex-1 items-center justify-center" title={stage.hint}>
+            <span className="flex flex-1 items-center" title={stage.hint}>
               {empty ? (
                 <span className="tnum text-[13px] text-ink-mute">none yet</span>
               ) : (
-                // The count sits absolutely outside the bar rather than as a sibling
-                // in the flex row, because a sibling is centred along with the bar and
-                // drags it off the funnel's axis by half the label width.
+                // Absolutely positioned rather than a sibling in the flex row so the
+                // bar's own width is unaffected by whether its count sits inside it.
                 <span
                   className={[
                     'relative flex h-8 items-center justify-center rounded-md',

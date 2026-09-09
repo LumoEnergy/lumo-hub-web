@@ -154,13 +154,23 @@ describe('the customers screen', () => {
     expect(bodyText()).not.toMatch(/your link|personal link|QR/i);
   });
 
-  it('offers the five views a firm actually arrives with', () => {
+  it('offers four views and no undifferentiated list', () => {
+    // "All" was 808 rows of averaged book that opened on the 322 households nothing
+    // had happened to yet. Invited is where the campaign actually is.
     mount('mid-campaign', <CustomersPage />);
     const group = screen.getByRole('group', { name: 'Which customers' });
     const labels = within(group)
       .getAllByRole('button')
       .map((b) => b.textContent?.replace(/\d+$/, '').trim());
-    expect(labels).toEqual(['All', 'Invited', 'Not yet contacted', 'Needs you', 'Active']);
+    expect(labels).toEqual(['Invited', 'Not yet contacted', 'Needs you', 'Active']);
+  });
+
+  it('opens on Invited when no view is named', () => {
+    mount('mid-campaign', <CustomersPage />);
+    const pressed = screen
+      .getAllByRole('button', { pressed: true })
+      .map((b) => b.textContent?.replace(/\d+$/, '').trim());
+    expect(pressed).toEqual(['Invited']);
   });
 
   it('gives each view its own columns rather than one table filtered', () => {
@@ -170,7 +180,7 @@ describe('the customers screen', () => {
         .map((h) => h.textContent?.trim().replace(/[\u2191\u2193\u2195]/g, ''));
 
     mount('mid-campaign', <CustomersPage />);
-    expect(headers()).toEqual(['Household', 'Status', 'Waiting', 'Reward', 'Open']);
+    expect(headers()).toEqual(['Household', 'Status', 'Emailed', 'Reward', 'Open']);
 
     cleanup();
     mount('mid-campaign', <CustomersPage />, '/?view=waiting');
@@ -287,7 +297,7 @@ describe('the customers screen', () => {
     const rows = within(screen.getByRole('table')).getAllByRole('row');
     // 150 body rows plus the header.
     expect(rows.length).toBe(151);
-    expect(bodyText()).toMatch(/Showing 150 of 8\d\d/);
+    expect(bodyText()).toMatch(/Showing 150 of 4\d\d/);
   });
 
   it('does not repeat the one approval on all 118 rows', () => {

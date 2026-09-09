@@ -113,10 +113,11 @@ const ROUTES = [
   {
     id: 'customers',
     path: 'customers',
-    expect: [/Customers/, /Household/, /Reward/, /Email opened/],
-    // The column nobody understood, the status jargon, and the banner that shouted
-    // about money on every single visit.
-    reject: [/Whose/, /possible match/i, /going to nobody/i],
+    // No view named, so this is also the check that the default is Invited.
+    expect: [/Customers/, /Household/, /Reward/, /Email opened/, /Households we have emailed/],
+    // The column nobody understood, the status jargon, the banner that shouted about
+    // money on every visit, and the undifferentiated list that used to open first.
+    reject: [/Whose/, /possible match/i, /going to nobody/i, /Everyone on your list/],
   },
   {
     id: 'customers-needs-you',

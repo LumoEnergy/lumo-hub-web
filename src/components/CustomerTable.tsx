@@ -97,8 +97,6 @@ const REWARD: Column = {
 };
 
 const COLUMNS: Record<ViewId, readonly Column[]> = {
-  all: [HOUSEHOLD, STATUS, WAITING, REWARD],
-
   invited: [
     HOUSEHOLD,
     STATUS,
