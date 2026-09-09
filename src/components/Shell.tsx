@@ -1,6 +1,8 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, Outlet, useSearchParams } from 'react-router-dom';
 import { useDemoStore } from '../store/DemoStore';
 import { currentSeat } from '../fixtures';
+import { Walkthrough } from './Walkthrough';
 
 /**
  * The shell.
@@ -35,6 +37,30 @@ const NAV = [
 export function Shell() {
   const { company, personaName, dirty, reset } = useDemoStore();
   const seat = currentSeat(company);
+  const [params] = useSearchParams();
+
+  /**
+   * The walkthrough opens once per page load, not once per navigation.
+   *
+   * That distinction is the whole requirement, and it is why this lives here rather
+   * than on the dashboard: the shell is mounted once and the pages come and go
+   * underneath it, so moving between tabs leaves this state alone. A hard refresh
+   * remounts the shell and it opens again.
+   *
+   * The initialiser runs once, so `?guide=off` is read at mount and later param
+   * changes, of which there are several on the customers screen, cannot reopen it.
+   *
+   * `opens` is a counter rather than a boolean because it doubles as the walkthrough's
+   * key: every open is a fresh mount, which is how it starts at step one again without
+   * an effect that resets the index after the first render.
+   */
+  const [opens, setOpens] = useState(() => (params.get('guide') === 'off' ? 0 : 1));
+  const [guideOpen, setGuideOpen] = useState(() => params.get('guide') !== 'off');
+
+  const openGuide = () => {
+    setOpens((n) => n + 1);
+    setGuideOpen(true);
+  };
 
   return (
     <div className="min-h-dvh bg-page lg:flex">
@@ -88,7 +114,10 @@ export function Shell() {
           </nav>
         </div>
 
-        <ResetControl personaName={personaName} dirty={dirty} onReset={reset} />
+        <div className="space-y-2">
+          <GuideLink onOpen={openGuide} />
+          <ResetControl personaName={personaName} dirty={dirty} onReset={reset} />
+        </div>
       </aside>
 
       {/* Mobile app bar. */}
@@ -112,7 +141,8 @@ export function Shell() {
         <div className="mx-auto w-full max-w-[1200px] lg:px-8 lg:py-8">
           <Outlet />
         </div>
-        <div className="px-4 pt-2 pb-6 lg:hidden">
+        <div className="space-y-2 px-4 pt-2 pb-6 lg:hidden">
+          <GuideLink onOpen={openGuide} />
           <ResetControl personaName={personaName} dirty={dirty} onReset={reset} />
         </div>
       </main>
@@ -142,6 +172,34 @@ export function Shell() {
           ))}
         </ul>
       </nav>
+
+      <Walkthrough
+        key={opens}
+        companyName={company.name}
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+      />
+    </div>
+  );
+}
+
+/**
+ * The way back into the guide.
+ *
+ * Without it the walkthrough is only reachable by reloading the page, which is fine
+ * for an installer seeing it once and useless in a research session where someone
+ * asks to see the opening again.
+ */
+function GuideLink({ onOpen }: { onOpen: () => void }) {
+  return (
+    <div className="px-2">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="text-[12px] font-semibold text-ink-mute underline decoration-line underline-offset-2 transition-colors duration-150 hover:text-ink-soft"
+      >
+        How this works
+      </button>
     </div>
   );
 }

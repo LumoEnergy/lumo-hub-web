@@ -153,6 +153,24 @@ const ROUTES = [
     expect: [/Your team/, /Admin/, /Viewer/, /Invite sent/],
     reject: [/sort code/i],
   },
+  {
+    // The only check that lets the guide open. Everything else suppresses it so the
+    // screen underneath is what gets tested rather than an overlay covering it.
+    id: 'first-open guide',
+    path: '',
+    guide: true,
+    expect: [
+      /Getting started/,
+      /Welcome to Lumo/,
+      /Northfield Renewables earns/,
+      /£50 per household/,
+      /partners@lumoenergy\.co\.uk/,
+    ],
+    // Adding a customer earns nothing on its own, so no figure above the unit rate
+    // belongs here, and the guide must not promise energy data the build has no
+    // route to.
+    reject: [/£\s?\d{3,}/, /savings/i, /state of charge/i],
+  },
 ];
 
 /**
@@ -214,8 +232,15 @@ for (const check of CHECKS) {
   // A path may already carry a query, the customer views are addressed by one, so the
   // persona joins with & rather than a second ?. Appending ? unconditionally produced
   // `customers?view=attention?p=...`, which the router reads as a single view value of
-  // "attention?p=mid-campaign", falls back to All, and fails on the wrong screen.
-  const url = `${origin}${base}${check.path}${check.path.includes('?') ? '&' : '?'}p=${check.persona}`;
+  // "attention?p=mid-campaign", falls back to Invited, and fails on the wrong screen.
+  //
+  // `guide=off` unless the check is the one testing the guide. The walkthrough opens
+  // over every screen on a fresh load, which is the point of it, and would otherwise
+  // mean every check here was reading an overlay instead of the page.
+  const query = [`p=${check.persona}`, check.guide ? null : 'guide=off']
+    .filter(Boolean)
+    .join('&');
+  const url = `${origin}${base}${check.path}${check.path.includes('?') ? '&' : '?'}${query}`;
   const problems = [];
   let text = '';
 

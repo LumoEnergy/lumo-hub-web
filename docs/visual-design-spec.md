@@ -156,6 +156,33 @@ the first screen anyone saw described admin rather than a campaign.
   newsletter link → add a household. Answers *what goes out, when, from whom?*
 - **Account.** The team, their roles, and the company facts. Answers *who else can get in?*
 
+### The first-open guide
+
+Five steps in a modal on first load: welcome and the reward, send us your list, we load it and
+check with you, watch it land, then it keeps working. Dot index, click through, escape or skip
+to dismiss, and a quiet `How this works` link in the sidebar to reopen it.
+
+**It fires once per page load, not once per navigation.** That is the requirement and it is
+why the state lives in the shell rather than on the dashboard: the shell mounts once and the
+pages come and go underneath it, so changing tab leaves it closed and a hard refresh reopens
+it. Moving that state onto a page component would break the timing while leaving every screen
+looking correct, so it is asserted in a test.
+
+**Not persisted.** No localStorage, no "do not show again". Every other piece of state here is
+in memory and resettable, and a demo that hides its own opening on the second run is a demo
+that cannot be shown twice. `?guide=off` suppresses it for screenshots and for the deploy
+smoke check, which otherwise reads the overlay instead of the page.
+
+**Wireframes, not screenshots.** Each step that points at a place in the app draws a schematic
+of the chrome with one panel ringed in accent. A screenshot would be sharper and wrong twice
+over: it goes stale the next time a panel moves, and it presents fixture data as an example of
+the product.
+
+**The reward is stated per household and never as a total**, and the wording is "signs up and
+stays connected for 30 days", not "added". Adding a customer earns nothing on its own. "Each
+customer you add earns you £50" is the same overclaim as the £1,400 banner on the forbidden
+list, one household at a time.
+
 **Renamed from "Your list"**, which read as a page about people while a sibling tab
 genuinely was the list of people.
 
