@@ -26,11 +26,16 @@ state added or removed always shows up as a reviewable diff.
 
 Persona selection is URL-encoded so a specific scenario can be shared as a link.
 
-- `?p=established` (default), a 20-plus customer portfolio, mostly earning, two live
-  blockers. The investor and internal demo.
-- `?p=first-run`, zero customers. Tests whether the empty product still explains itself.
-- `?p=messy`, eight invited, five stuck at different stages, one email that never matched,
-  one confirmed £50. The research conversation.
+- `?p=mid-campaign` (default), an 808-household back-book part way through its send, money
+  earned, and a realistic tail of bounces and missing addresses. The investor and internal
+  demo.
+- `?p=awaiting-approval`, a loaded list where nothing has sent. Tests that the product
+  shows no money and invents no forecast before a campaign has run.
+- `?p=messy-list`, a badly kept book: no addresses, unconfirmed batteries, households on
+  Lumo that are credited to nobody. The research conversation.
+
+The customer view is also URL-encoded, so a screen can be shared directly:
+`customers?view=attention` and `customers?view=active`.
 
 Research fidelity wins where the two audiences conflict. The aspirational demo path is a
 subset of a complete state model, so you can always demo the good story by choosing a
@@ -58,9 +63,13 @@ an open commercial question rather than a decided one.
 ```bash
 npm install
 npm run dev
-npm test
 npm run check
 ```
+
+`npm run check` is the gate: type check, lint, tests, and the staleness guard on
+`docs/state-model.md`. **The type check is part of it deliberately.** `vite build` uses
+esbuild and strips types without checking them, so a build passing means nothing about type
+safety, and for a while the gate did not check either.
 
 The app is served from an unguessable path (`DEMO_BASE` in `src/demoBase.ts`), the host
 404s everything outside it, and `noindex` is set in three places. That is obscurity, not

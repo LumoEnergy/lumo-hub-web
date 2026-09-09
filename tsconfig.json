@@ -2,6 +2,9 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // The app ships no Node code. `node` is here for the copy guard test, which reads
+    // the repo off disk to prove no em dash made it in, and for `import.meta.dirname`.
+    "types": ["node", "vite/client"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",

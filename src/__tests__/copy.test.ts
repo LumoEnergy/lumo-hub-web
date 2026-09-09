@@ -27,13 +27,15 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const FILES = [
-  ...walk(join(ROOT, 'src')),
-  ...walk(join(ROOT, 'scripts')),
-  ...walk(join(ROOT, 'docs')),
-  join(ROOT, 'index.html'),
-  join(ROOT, 'README.md'),
-];
+/**
+ * Everything checkable, which now includes the repo root.
+ *
+ * The first version of this listed `src`, `scripts` and `docs` and two named root
+ * files, and eleven em dashes survived in `AGENTS.md`, `vite.config.ts` and
+ * `firebase.json` because nothing looked there. A guard with a hand-maintained scope
+ * is a guard that goes stale, so this walks the root and skips only what it must.
+ */
+const FILES = walk(ROOT).concat(join(ROOT, 'firebase.json'));
 
 describe('house style', () => {
   it('contains no em dash anywhere, in copy, comments or docs', () => {
@@ -67,7 +69,10 @@ describe('money honesty', () => {
   // phrases in order to check for them, so scanning them for the same strings just
   // finds the ban itself.
   const sources = FILES.filter(
-    (f) => /\.tsx?$/.test(f) && f.includes(`${join('', 'src')}`) && !f.includes('__tests__'),
+    (f) =>
+      /\.tsx?$/.test(f) &&
+      f.startsWith(join(ROOT, 'src')) &&
+      !f.includes('__tests__'),
   );
 
   it('never phrases a count of blocked households as a sum of money', () => {
