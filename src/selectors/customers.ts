@@ -1,12 +1,7 @@
 import type { HubCustomer } from '../fixtures';
 import { displayName } from '../fixtures';
-import type { ContactStateId, Owner, ResolvedState } from '../state';
-import {
-  AGGREGATED_STATES,
-  OWNER_QUEUE_ORDER,
-  REWARD_GBP,
-  resolveCustomerState,
-} from '../state';
+import type { ContactStateId, ResolvedState } from '../state';
+import { LIST_LEVEL_STATES, REWARD_GBP, resolveCustomerState } from '../state';
 
 /**
  * What each screen needs, derived from the fixtures and the state model.
@@ -42,39 +37,24 @@ export function buildRows(
   }));
 }
 
-export interface OwnerGroup {
-  readonly owner: Owner;
-  readonly rows: readonly CustomerRow[];
-}
-
 /**
- * The action queue.
+ * Does this row need the firm, as an individual piece of work?
  *
- * Grouped by owner so a firm can see at a glance what is theirs, and sorted
- * oldest-first within a group because the oldest blocker is the one closest to being
- * a dead lead. Rows that need no attention are excluded entirely: a queue that
- * includes "Lumo is testing control" trains people to skim it.
+ * THE ONE PREDICATE, used by the `Needs you` filter and by the dashboard count that
+ * links to it. The first version of each computed its own answer, and they disagreed:
+ * the filter used plain `resolved.needsAttention`, which counts every one of
+ * Kestrel's 118 rows awaiting the same single sign-off, so the dashboard promised 152
+ * households of work behind a link to a list of 34.
  *
- * Match blockers and anything in `AGGREGATED_STATES` are excluded here because they
- * get their own treatment above the list. A row that looks like every other row has
- * already failed at the one job that matters, and a hundred rows all saying "approve
- * the email" is not a queue.
+ * Two exclusions, for two different reasons. Match blockers are pinned above the
+ * list as a money callout, because a row that looks like every other row has already
+ * failed at the one job that matters. List-level states are one action covering the
+ * whole list — see `LIST_LEVEL_STATES`.
  */
-export function actionQueue(rows: readonly CustomerRow[]): readonly OwnerGroup[] {
-  const queued = rows.filter(
-    (row) =>
-      row.resolved.needsAttention &&
-      row.resolved.track !== 'match' &&
-      !(AGGREGATED_STATES as readonly string[]).includes(row.customer.contact),
-  );
-
-  return OWNER_QUEUE_ORDER.map((owner) => ({
-    owner,
-    rows: queued
-      .filter((row) => row.resolved.owner === owner)
-      .sort((a, b) => b.resolved.ageDays - a.resolved.ageDays),
-  })).filter((group) => group.rows.length > 0);
-}
+export const needsYouIndividually = (row: CustomerRow): boolean =>
+  row.resolved.needsAttention &&
+  row.resolved.track !== 'match' &&
+  !(LIST_LEVEL_STATES as readonly string[]).includes(row.customer.contact);
 
 /** Households on Lumo whose credit is going nowhere. Pinned above the list. */
 export function unmatchedRows(rows: readonly CustomerRow[]): readonly CustomerRow[] {
@@ -84,11 +64,12 @@ export function unmatchedRows(rows: readonly CustomerRow[]): readonly CustomerRo
 }
 
 /**
- * The three defects that are a batch job rather than a conversation.
+ * The three defects the firm is the only possible source of a fix for.
  *
- * Aggregate the data problems, itemise the people. Twenty-eight missing addresses is
- * one number and one argument; twelve warm leads are twelve named humans someone
- * would ring, so those stay as rows — see `actionQueue`.
+ * Each of these still appears as its own row in the table — a different address is
+ * needed for each one, so the household really is the unit of work. What this adds
+ * is the argument for spending an afternoon on them, stated once above the rows
+ * rather than repeated on every one of them.
  *
  * NO MULTIPLIED TOTAL, DELIBERATELY. An earlier version of this said "28 households
  * missing an address — that is £1,400 we cannot go after". It reads well and it is
@@ -149,25 +130,15 @@ export function dataQualityGroups(rows: readonly CustomerRow[]): readonly DataQu
 }
 
 /**
- * The silent majority, stated once.
+ * How many households need the firm one at a time.
  *
- * Around half of any back-book campaign never opens the email. Showing that as a
- * hundred individual tasks would bury everything that matters, and hiding it would
- * misrepresent the channel. So it is a cohort with a number and an honest sentence —
- * and no money figure, for the reason given above.
+ * Deliberately the same predicate as the `Needs you` filter. The dashboard links
+ * straight through to that filter, so a count here that does not match the number of
+ * rows there is not a rounding difference — it is the screen contradicting itself
+ * one click apart.
  */
-export interface SilentCohort {
-  readonly count: number;
-}
-
-export function silentCohort(rows: readonly CustomerRow[]): SilentCohort | null {
-  const count = rows.filter((row) => row.customer.contact === 'no_response').length;
-  if (count === 0) return null;
-  return { count };
-}
-
 export const needsAttentionCount = (rows: readonly CustomerRow[]): number =>
-  rows.filter((row) => row.resolved.needsAttention).length;
+  rows.filter(needsYouIndividually).length;
 
 export const earningCount = (rows: readonly CustomerRow[]): number =>
   rows.filter((row) => row.customer.activation === 'Smart Control Active').length;
@@ -259,8 +230,52 @@ export function earningsSummary(rows: readonly CustomerRow[]): EarningsSummary {
  * oldest-first. Someone who clicks a column header has a specific question and gets a
  * literal answer; someone who has just landed gets the useful order.
  */
-export type SortKey = 'priority' | 'household' | 'status' | 'owner' | 'age' | 'money';
+export type SortKey = 'priority' | 'household' | 'status' | 'age' | 'money';
 export type SortDirection = 'asc' | 'desc';
+
+/**
+ * The filters above the list.
+ *
+ * Four, because a filter nobody uses is worse than no filter: it is another decision
+ * on a screen whose job is to be scannable. Each of these answers a question a firm
+ * actually arrives with — is anything waiting on me, who is making me money, who has
+ * not heard from us yet, and let me see the lot.
+ *
+ * `attention` is where the old landing-page queue went. It is the same set of rows,
+ * reachable in one click from the dashboard, and no longer the first thing anyone
+ * sees when they log in.
+ */
+export type CustomerFilter = 'all' | 'attention' | 'earning' | 'not_emailed';
+
+export const CUSTOMER_FILTERS: readonly { id: CustomerFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'attention', label: 'Needs you' },
+  { id: 'earning', label: 'Earning' },
+  { id: 'not_emailed', label: 'Not emailed yet' },
+];
+
+export function filterRows(
+  rows: readonly CustomerRow[],
+  filter: CustomerFilter,
+): readonly CustomerRow[] {
+  switch (filter) {
+    case 'attention':
+      return rows.filter(needsYouIndividually);
+    case 'earning':
+      return rows.filter((row) => row.customer.activation === 'Smart Control Active');
+    case 'not_emailed':
+      return rows.filter((row) =>
+        ['imported', 'awaiting_approval', 'queued', 'held_no_email', 'held_unconfirmed'].includes(
+          row.customer.contact,
+        ),
+      );
+    default:
+      return rows;
+  }
+}
+
+export const isCustomerFilter = (value: string | null): value is CustomerFilter =>
+  value !== null && CUSTOMER_FILTERS.some((f) => f.id === value);
 
 const MONEY_RANK: Record<MoneyPosition, number> = {
   paid: 5,
@@ -301,11 +316,6 @@ export function sortRows(
         return (
           ((a.resolved.state?.label ?? '').localeCompare(b.resolved.state?.label ?? '') || tie) *
           sign
-        );
-      case 'owner':
-        return (
-          (OWNER_QUEUE_ORDER.indexOf(a.resolved.owner) -
-            OWNER_QUEUE_ORDER.indexOf(b.resolved.owner) || tie) * sign
         );
       case 'age':
         return (a.resolved.ageDays - b.resolved.ageDays || tie) * sign;

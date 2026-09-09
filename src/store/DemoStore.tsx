@@ -46,6 +46,14 @@ interface DemoStore {
   /** Claiming an unmatched household. Lumo ties it by hand. */
   claimHousehold: (id: string) => void;
   addCustomers: (drafts: readonly CustomerDraft[]) => readonly string[];
+  /**
+   * Handing over another list. It lands as `processing` with no outcome counts,
+   * because that is what actually happens — the work is asynchronous and the demo
+   * should not pretend a file is parsed by the time the button springs back.
+   */
+  addFile: (filename: string, rows: number) => void;
+  /** Changing the daily send cap, which rebuilds the remaining batches. */
+  setDailyCap: (cap: number) => void;
   reset: () => void;
 }
 
@@ -182,6 +190,74 @@ export function DemoStoreProvider({
     [asOf, company.seats, company.imports, company.campaignEmail.approved],
   );
 
+  const addFile = useCallback(
+    (filename: string, rows: number) => {
+      const seat = company.seats.find((s) => s.isCurrentUser)?.name ?? 'Unknown';
+      setCompany((current) => ({
+        ...current,
+        imports: [
+          ...current.imports,
+          {
+            id: `imp-${current.imports.length + 1}`,
+            filename,
+            arrivedBy: 'uploaded',
+            status: 'processing',
+            suppliedBy: seat,
+            suppliedOn: asOf,
+            source: 'Uploaded from the Hub',
+            rowsSupplied: rows,
+            rowsLoaded: null,
+            rowsHeld: null,
+            rowsRejected: null,
+            rejectedReason: null,
+          },
+        ],
+      }));
+      setDirty(true);
+    },
+    [asOf, company.seats],
+  );
+
+  /**
+   * Re-cut the remaining batches at a new daily cap.
+   *
+   * Only what has not gone yet: a sent batch is a historical fact and rewriting it
+   * to fit a new cap would be inventing history. The dates restart from tomorrow,
+   * because the cap that matters is the one applying to the next send.
+   */
+  const setDailyCap = useCallback(
+    (cap: number) => {
+      setCompany((current) => {
+        const sent = current.schedule.filter((b) => b.status === 'sent');
+        const remaining = current.schedule
+          .filter((b) => b.status !== 'sent')
+          .reduce((total, b) => total + b.count, 0);
+
+        const batches = [];
+        let left = remaining;
+        let day = 1;
+        while (left > 0) {
+          const count = Math.min(cap, left);
+          const date = new Date(`${asOf}T00:00:00Z`);
+          date.setUTCDate(date.getUTCDate() + day);
+          batches.push({
+            id: `re-${day}`,
+            date: date.toISOString().slice(0, 10),
+            count,
+            status: 'scheduled' as const,
+            opened: null,
+          });
+          left -= count;
+          day += 1;
+        }
+
+        return { ...current, dailySendCap: cap, schedule: [...sent, ...batches] };
+      });
+      setDirty(true);
+    },
+    [asOf],
+  );
+
   const reset = useCallback(() => {
     const fresh = loadPersona(personaId, new Date());
     setCustomers(fresh.customers);
@@ -203,6 +279,8 @@ export function DemoStoreProvider({
       confirmBattery,
       claimHousehold,
       addCustomers,
+      addFile,
+      setDailyCap,
       reset,
     }),
     [
@@ -218,6 +296,8 @@ export function DemoStoreProvider({
       confirmBattery,
       claimHousehold,
       addCustomers,
+      addFile,
+      setDailyCap,
       reset,
     ],
   );

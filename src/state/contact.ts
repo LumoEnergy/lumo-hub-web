@@ -242,23 +242,23 @@ export const isPreSignup = (id: ContactStateId): boolean => id !== 'signed_up';
 export const HELD_STATES: readonly ContactStateId[] = ['held_no_email', 'held_unconfirmed'];
 
 /**
- * States where the household is NOT the unit of work, so the row must never appear
- * as an individual task.
+ * States whose action belongs to the whole LIST rather than to a household, so the
+ * row must never be presented as an individual task.
  *
- * This is the same lesson as `no_response` in three more places, and it is the one
- * that decides whether the queue is usable. `awaiting_approval` is the clearest: one
- * sign-off releases the entire list, so putting it on every row would produce a
- * hundred and eighteen identical instructions to click the same button once. The
- * held states and bounces are batch jobs — fifty missing addresses is a job you sit
- * down and do, not fifty separate decisions.
+ * `awaiting_approval` is the only one, and it is the clearest possible case: one
+ * sign-off releases the entire list, so putting it on every row produces a hundred
+ * and eighteen identical instructions to click the same button once.
  *
- * Each of these is presented in aggregate above the list instead. `clicked` is
- * deliberately absent: a warm lead is a specific person somebody would ring, and a
- * name is what makes that possible.
+ * THIS USED TO INCLUDE THE HELD STATES AND BOUNCES, AND THAT WAS A CONFLATION. The
+ * reasoning was that fifty missing addresses is a batch job rather than fifty
+ * decisions — true of the old owner-grouped queue, which rendered a card and an
+ * instruction per row. It is not true of a sortable table, where fifty rows each
+ * showing "email address missing" is precisely the right affordance: you filter,
+ * you work down it, and every one needs a DIFFERENT address that only the firm has.
+ * Excluding them made the count say nobody needs you on an account whose only
+ * outstanding work was thirty-four missing addresses.
+ *
+ * The test is whether the action is per-household or per-list. Supplying an address
+ * is per-household. Approving the email is per-list.
  */
-export const AGGREGATED_STATES: readonly ContactStateId[] = [
-  'awaiting_approval',
-  'held_no_email',
-  'held_unconfirmed',
-  'bounced',
-];
+export const LIST_LEVEL_STATES: readonly ContactStateId[] = ['awaiting_approval'];

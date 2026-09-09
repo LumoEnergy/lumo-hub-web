@@ -69,43 +69,69 @@ const origin = argument.includes(base) ? argument.split(base)[0] : argument;
 const PERSONAS = [
   {
     id: 'mid-campaign',
+    path: '',
     expect: [
       /Demo: Mid-campaign/,
-      /Your customers/,
-      // Money on the board, and the household earning for nobody.
-      /Yours so far/,
-      /going to nobody/i,
+      // The dashboard, which is the whole point of the landing page: the funnel and
+      // the money, not a list of chores.
+      /Where your customers are/,
+      /Earned by Northfield Renewables/,
+      /On your list/,
+      /Earning/,
     ],
     reject: [/Nothing has been sent yet/],
   },
   {
     id: 'awaiting-approval',
-    expect: [
-      /Demo: Awaiting approval/,
-      /Nothing has been sent yet/,
-      /only sign-off/,
-    ],
+    path: '',
+    expect: [/Demo: Awaiting approval/, /Nothing has been sent yet/, /only sign-off/],
     // Nothing has sent, so there is no money and there must be no guess at any.
-    reject: [/Yours so far/, /could earn/i, /projected/i],
+    reject: [/Earned by/, /could earn/i, /projected/i],
   },
   {
     id: 'messy-list',
-    expect: [
-      /Demo: Messy list/,
-      // The research conversation: a filthy list, and someone earning regardless.
-      /missing an email address/i,
-      /email bounced/i,
-      /going to nobody/i,
-    ],
+    path: '',
+    expect: [/Demo: Messy list/, /Where your customers are/, /No usable address/],
     reject: [/Nothing has been sent yet/],
   },
 ];
 
 /**
- * Copy that must never appear anywhere, in any persona.
+ * The other two tabs, checked on the demo persona.
  *
- * The two review notes that changed the product: no individual framing, and no
- * money that depends on a conversion rate nobody has measured.
+ * Route coverage exists because the tabs were renumbered: the landing page became
+ * the dashboard, earnings folded into customers, and `list` became `campaign`. A
+ * check that only ever loaded `/` would have passed while two of the three tabs
+ * 404ed, which is the same class of failure as the blank page this script was
+ * written for.
+ */
+const ROUTES = [
+  {
+    id: 'customers',
+    path: 'customers',
+    expect: [/Customers/, /Household/, /Reward/, /going to nobody/i],
+    // The column nobody understood, and the screen it used to duplicate.
+    reject: [/Whose/],
+  },
+  {
+    id: 'campaign',
+    path: 'campaign',
+    expect: [
+      /Campaign/,
+      /commusoft-battery-jobs/,
+      /Still processing/,
+      /When it goes out/,
+      /Send from your own domain/,
+    ],
+    reject: [/Your list/],
+  },
+];
+
+/**
+ * Copy that must never appear anywhere, on any page, in any persona.
+ *
+ * The review notes that changed the product: no individual framing, and no money
+ * that depends on a conversion rate nobody has measured.
  */
 const NEVER = [
   /your personal link/i,
@@ -113,6 +139,7 @@ const NEVER = [
   /you could earn/i,
   /projected/i,
   /per year/i,
+  /on track for/i,
 ];
 
 async function renderedText(url) {
@@ -143,8 +170,13 @@ async function renderedText(url) {
 
 let failed = false;
 
-for (const persona of PERSONAS) {
-  const url = `${origin}${base}?p=${persona.id}`;
+const CHECKS = [
+  ...PERSONAS.map((p) => ({ ...p, persona: p.id, name: `persona ${p.id}` })),
+  ...ROUTES.map((r) => ({ ...r, persona: 'mid-campaign', name: `route /${r.path}` })),
+];
+
+for (const check of CHECKS) {
+  const url = `${origin}${base}${check.path}?p=${check.persona}`;
   const problems = [];
   let text = '';
 
@@ -152,10 +184,10 @@ for (const persona of PERSONAS) {
     const rendered = await renderedText(url);
     text = rendered.text;
     if (rendered.bytes === 0) problems.push('#root is empty — blank screen');
-    for (const pattern of persona.expect) {
+    for (const pattern of check.expect) {
       if (!pattern.test(text)) problems.push(`missing expected ${pattern}`);
     }
-    for (const pattern of [...persona.reject, ...NEVER]) {
+    for (const pattern of [...check.reject, ...NEVER]) {
       if (pattern.test(text)) problems.push(`unexpectedly present: ${pattern}`);
     }
   } catch (error) {
@@ -164,11 +196,11 @@ for (const persona of PERSONAS) {
 
   if (problems.length > 0) {
     failed = true;
-    console.error(`FAIL ${persona.id}  ${url}`);
+    console.error(`FAIL ${check.name}  ${url}`);
     for (const problem of problems) console.error(`       ${problem}`);
     console.error(`       rendered: ${text.slice(0, 200) || '(nothing)'}`);
   } else {
-    console.log(`ok   ${persona.id.padEnd(18)} "${text.slice(0, 70)}…"`);
+    console.log(`ok   ${check.name.padEnd(26)} "${text.slice(0, 60)}…"`);
   }
 }
 
@@ -176,4 +208,4 @@ if (failed) {
   console.error('\nsmoke failed: the deploy does not render as expected.');
   process.exit(1);
 }
-console.log(`\nsmoke: ok. all ${PERSONAS.length} personas render at ${origin}${base}`);
+console.log(`\nsmoke: ok. ${CHECKS.length} checks passed at ${origin}${base}`);

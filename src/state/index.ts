@@ -15,7 +15,7 @@ export {
   CONTACT,
   CONTACT_STATE_IDS,
   HELD_STATES,
-  AGGREGATED_STATES,
+  LIST_LEVEL_STATES,
   contactState,
   isPreSignup,
 } from './contact';

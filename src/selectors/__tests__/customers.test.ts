@@ -3,13 +3,14 @@ import { loadPersona } from '../../fixtures';
 import type { PersonaId } from '../../fixtures';
 import { REWARD_GBP } from '../../state';
 import {
-  actionQueue,
   buildRows,
   dataQualityGroups,
   earningsSummary,
+  filterRows,
   gbp,
   moneyPosition,
-  silentCohort,
+  needsAttentionCount,
+  needsYouIndividually,
   sortRows,
   unmatchedRows,
 } from '../customers';
@@ -21,64 +22,39 @@ const rowsFor = (persona: PersonaId) => {
   return buildRows(loaded.customers, loaded.asOf);
 };
 
-describe('the action queue', () => {
+describe('what needs the firm, one household at a time', () => {
   const rows = rowsFor('messy-list');
-  const groups = actionQueue(rows);
-
-  it('shows the firm their own group first', () => {
-    expect(groups[0].owner).toBe('installer');
-  });
-
-  it('sorts oldest blocker first within a group, because the oldest is nearly dead', () => {
-    for (const group of groups) {
-      const ages = group.rows.map((row) => row.resolved.ageDays);
-      expect([...ages].sort((a, b) => b - a)).toEqual(ages);
-    }
-  });
+  const queued = filterRows(rows, 'attention');
 
   it('excludes anything nobody needs to act on', () => {
-    for (const group of groups) {
-      for (const row of group.rows) {
-        expect(row.resolved.needsAttention, row.customer.id).toBe(true);
-        expect(row.resolved.owner, row.customer.id).not.toBe('nobody');
-      }
+    for (const row of queued) {
+      expect(row.resolved.needsAttention, row.customer.id).toBe(true);
+      expect(row.resolved.owner, row.customer.id).not.toBe('nobody');
     }
   });
 
-  it('never lists a household that is earning', () => {
-    const queued = groups.flatMap((g) => g.rows);
-    const earning = queued.filter(
-      (row) => row.resolved.track === 'none' && row.customer.match !== null,
-    );
-    expect(earning).toEqual([]);
-  });
-
-  it('keeps unmatched households out of the queue, so they cannot hide in a group', () => {
-    const queued = groups.flatMap((g) => g.rows.map((r) => r.customer.id));
+  it('keeps unmatched households out, so they cannot hide among ordinary rows', () => {
+    // They are pinned above the list as a money callout instead. A row that looks
+    // like every other row has already failed at the one job that matters.
+    const ids = queued.map((r) => r.customer.id);
     const unmatched = unmatchedRows(rows).map((r) => r.customer.id);
     expect(unmatched.length).toBeGreaterThan(0);
     for (const id of unmatched) {
-      expect(queued).not.toContain(id);
+      expect(ids).not.toContain(id);
     }
   });
 
-  it('keeps data-quality rows out of the queue, because they are a batch job', () => {
-    // Fifty missing addresses listed one at a time is wallpaper. They belong in the
-    // aggregated callout with the money attached.
-    const queued = groups.flatMap((g) => g.rows.map((r) => r.customer.contact));
-    expect(queued).not.toContain('held_no_email');
-    expect(queued).not.toContain('held_unconfirmed');
-    expect(queued).not.toContain('bounced');
+  it('does include the missing addresses, because each needs a different answer', () => {
+    // These used to be excluded on the grounds that fifty of them is a batch job.
+    // True of the old card queue, false of a filtered table — and it made the count
+    // say nobody needed you on an account whose only work was 50 missing addresses.
+    const states = queued.map((r) => r.customer.contact);
+    expect(states).toContain('held_no_email');
+    expect(states).toContain('held_unconfirmed');
   });
 
-  it('drops empty groups rather than rendering a heading with nothing under it', () => {
-    for (const group of groups) {
-      expect(group.rows.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('never queues a transient state a firm cannot influence', () => {
-    const live = actionQueue(rowsFor('mid-campaign')).flatMap((g) => g.rows);
+  it('never includes a transient state a firm cannot influence', () => {
+    const live = filterRows(rowsFor('mid-campaign'), 'attention');
     const transient = live.filter(
       (row) =>
         row.customer.activation === 'Smart Control Test Running' ||
@@ -88,10 +64,9 @@ describe('the action queue', () => {
     expect(transient).toEqual([]);
   });
 
-  it('leaves the warm leads in the queue as named people', () => {
-    // The one contact state that stays itemised. Twelve humans a firm would ring is
-    // a call list; a number is not.
-    const live = actionQueue(rowsFor('mid-campaign')).flatMap((g) => g.rows);
+  it('leaves the warm leads in as named people', () => {
+    // Twelve humans a firm would ring is a call list; a number is not.
+    const live = filterRows(rowsFor('mid-campaign'), 'attention');
     const clicked = live.filter((row) => row.customer.contact === 'clicked');
     expect(clicked.length).toBeGreaterThan(9);
     for (const row of clicked) {
@@ -99,15 +74,32 @@ describe('the action queue', () => {
     }
   });
 
-  it('never queues the silent majority', () => {
-    // The largest state in any campaign. If it ever enters the queue, the queue is
+  it('never includes the silent majority', () => {
+    // The largest state in any campaign. If it ever enters this set, the filter is
     // useless, so this is the assertion protecting the whole screen.
-    const live = actionQueue(rowsFor('mid-campaign')).flatMap((g) => g.rows);
+    const live = filterRows(rowsFor('mid-campaign'), 'attention');
     expect(live.filter((row) => row.customer.contact === 'no_response')).toEqual([]);
+  });
+
+  it('never asks for the same list-wide sign-off once per household', () => {
+    // 118 rows all saying "approve the email" is one click described 118 times.
+    const kestrel = rowsFor('awaiting-approval');
+    const awaiting = kestrel.filter((row) => row.customer.contact === 'awaiting_approval');
+    expect(awaiting.length).toBeGreaterThan(100);
+    expect(awaiting.every((row) => !needsYouIndividually(row))).toBe(true);
+  });
+
+  it('counts exactly what the filter shows, because one links to the other', () => {
+    // The dashboard states a number and links straight to this filter. Two different
+    // answers a click apart is the screen contradicting itself.
+    for (const persona of ['mid-campaign', 'awaiting-approval', 'messy-list'] as const) {
+      const all = rowsFor(persona);
+      expect(needsAttentionCount(all), persona).toBe(filterRows(all, 'attention').length);
+    }
   });
 });
 
-describe('the aggregated data-quality callouts', () => {
+describe('the data-quality arguments', () => {
   const rows = rowsFor('messy-list');
   const groups = dataQualityGroups(rows);
 
@@ -151,20 +143,6 @@ describe('the aggregated data-quality callouts', () => {
   it('drops a group with no rows rather than saying "0 bounced"', () => {
     const clean = dataQualityGroups(rowsFor('awaiting-approval'));
     expect(clean.map((g) => g.contact)).toEqual(['held_no_email', 'held_unconfirmed']);
-  });
-});
-
-describe('the silent cohort', () => {
-  it('counts the non-responders and puts no price on them', () => {
-    const cohort = silentCohort(rowsFor('mid-campaign'));
-    expect(cohort).not.toBeNull();
-    expect(cohort!.count).toBeGreaterThan(80);
-    // Same rule as the data-quality groups: 90 x £50 is not money anybody lost.
-    expect(cohort).not.toHaveProperty('atStakeGbp');
-  });
-
-  it('is absent before anything has been sent', () => {
-    expect(silentCohort(rowsFor('awaiting-approval'))).toBeNull();
   });
 });
 

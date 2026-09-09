@@ -3,9 +3,9 @@ import { Shell } from './components/Shell';
 import { DemoStoreProvider } from './store/DemoStore';
 import { DEMO_BASE } from './demoBase';
 import { personaFromSearch } from './fixtures';
+import { DashboardPage } from './pages/DashboardPage';
 import { CustomersPage } from './pages/CustomersPage';
-import { YourListPage } from './pages/YourListPage';
-import { EarningsPage } from './pages/EarningsPage';
+import { CampaignPage } from './pages/CampaignPage';
 import { JoinPage } from './pages/JoinPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -35,12 +35,15 @@ function PersonaGate() {
     <DemoStoreProvider key={personaId} personaId={personaId}>
       <Routes>
         <Route path="/" element={<Shell />}>
-          <Route index element={<CustomersPage />} />
-          <Route path="earnings" element={<EarningsPage />} />
-          <Route path="list" element={<YourListPage />} />
-          {/* The old add-a-customer screen. Adding by hand is now a panel on
-              `list`, so anything holding the old URL lands somewhere sensible. */}
-          <Route path="add" element={<Navigate to="/list" replace />} />
+          <Route index element={<DashboardPage />} />
+          <Route path="customers" element={<CustomersPage />} />
+          <Route path="campaign" element={<CampaignPage />} />
+          {/* Retired screens. Earnings is now a column on `customers` and a figure
+              on the dashboard; adding by hand is a panel on `campaign`. Anything
+              holding an old URL lands where that content went rather than on a 404. */}
+          <Route path="earnings" element={<Navigate to="/customers?filter=earning" replace />} />
+          <Route path="list" element={<Navigate to="/campaign" replace />} />
+          <Route path="add" element={<Navigate to="/campaign" replace />} />
         </Route>
         {/* Where the company newsletter link resolves to. */}
         <Route path="/j/:token" element={<JoinPage />} />

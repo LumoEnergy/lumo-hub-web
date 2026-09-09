@@ -16,9 +16,9 @@ afterEach(cleanup);
  * DEMO_BASE changes, the last test here fails and says so.
  */
 describe('App at the base path', () => {
-  it('renders the customers screen', () => {
+  it('lands on the dashboard, not on a list of chores', () => {
     render(<App />);
-    expect(screen.getByRole('heading', { name: 'Your customers' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy();
   });
 
   it('mounts both shell navigations, and keeps them tellable apart', () => {
@@ -26,10 +26,16 @@ describe('App at the base path', () => {
     // Two of each link is correct: the sidebar and the bottom tab bar are both in the
     // DOM and CSS chooses. The named landmarks are what stop that being a mess for
     // anyone not looking at the CSS.
+    expect(screen.getAllByRole('link', { name: /Dashboard/ })).toHaveLength(2);
     expect(screen.getAllByRole('link', { name: /Customers/ })).toHaveLength(2);
-    expect(screen.getAllByRole('link', { name: /Earnings/ })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: /Campaign/ })).toHaveLength(2);
     expect(screen.getByRole('navigation', { name: 'Sections' })).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Sections, bottom bar' })).toBeTruthy();
+  });
+
+  it('has no earnings tab, because it listed the same households twice', () => {
+    render(<App />);
+    expect(screen.queryAllByRole('link', { name: /Earnings/ })).toHaveLength(0);
   });
 
   it('identifies the account by company, not by the person logged in', () => {

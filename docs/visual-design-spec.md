@@ -121,16 +121,43 @@ persona.** The `awaiting-approval` persona exists to test that this holds.
 1. **App bar**, 52px. Company name left, current seat right. No share icon — there is no
    personal link in this product.
 2. **Content**, scrolling, 16px gutter.
-3. **Bottom tab bar**, 56px plus safe-area inset. Customers, Earnings, Your list.
+3. **Bottom tab bar**, 56px plus safe-area inset. Dashboard, Customers, Campaign.
 
 ### Per screen
 
-- **Customers.** Summary strip → fix callout → unmatched callout → `Needs you | All` toggle
-  → table (desktop) or owner-grouped cards (mobile).
-- **Earnings.** Money hero → paid → confirmed → in flight → not earning, each row carrying
-  the blocker holding it up.
-- **Your list.** The import report → the campaign email with its preview → permission →
-  the newsletter link → add a household.
+Three tabs, revised after the first founder review. The previous four opened the app on an
+owner-grouped attention queue and had **two** tabs that were both lists of the same
+households — one for progress, one for money. The reader had to hold both in their head and
+reconcile them, and the first screen anyone saw described admin rather than a campaign.
+
+- **Dashboard.** Money hero (or the approval callout, before anything has sent) → journey
+  funnel with the drop-off accounted for → send schedule → one small panel routing into
+  what needs the firm. Answers *is this working?*
+- **Customers.** Unmatched callout → filter row (`All | Needs you | Earning | Not emailed
+  yet`) → one table (desktop) or cards (mobile), with the reward as a column. Answers *who,
+  and how much?* The old attention queue is the `Needs you` filter.
+- **Campaign.** File records with what became of every row → the email and its one sign-off
+  → the send schedule and its daily rate → who it comes from → permission → the newsletter
+  link → add a household. Answers *what goes out, when, from whom?*
+
+**Renamed from "Your list"**, which read as a page about people while a sibling tab
+genuinely was the list of people.
+
+### The funnel
+
+Five stages, narrowing: on your list → emailed → delivered → opened → signed up → earning.
+Hand-rolled CSS bars; no charting library in a disposable prototype.
+
+- **Bar width is share of the list. The percentage is share of the stage above.** Two
+  different questions, and conflating them is how funnels mislead — a bar drawn to the
+  conversion rate makes a 9% bounce look like a cliff, and one drawn to share of list hides
+  where the loss happened.
+- Bars have a 6% floor width, because "too small to read" is not the same information as
+  "small".
+- Green only on the last stage. Green means money, and only `earning` is money.
+- **Everything the funnel drops is accounted for underneath** — queued, no usable address,
+  stopped chasing. "808 on the list, 486 emailed" otherwise invites the assumption that the
+  product lost the other 322.
 
 ## Hierarchy and typography
 
@@ -225,7 +252,10 @@ be a disposable shell around two durable modules.
 - `ImportReport` — supplied, loaded, held, rejected, with the reason.
 - `StateChip`, `AgeChip`, `OwnerChip`.
 - `Sheet` — bottom sheet on mobile, centred dialog on desktop. One implementation.
-- `SegmentedToggle` — `Needs you | All`.
+- `SegmentedToggle` — `All | Needs you | Earning | Not emailed yet`. Toggle buttons with
+  `aria-pressed`, **not** `role="tablist"`: tabs promise a panel each, and these press in and
+  out over one list that stays put.
+- `Funnel` / `FunnelAside`, `SendSchedule`, `FileRecords`.
 - `Button` (primary, secondary, quiet), `Field`, `PasteGrid`, `CopyBlock`.
 - `EmptyState`, `ResetPill`.
 
@@ -248,40 +278,67 @@ be a disposable shell around two durable modules.
   £1,400 we cannot go after" reads like a fact and prices the fix at 100% conversion, on a
   channel where a realistic back-book return is a fraction of that. Quote the rate per
   household instead: it is true, and it still makes the argument. A total is only allowed
-  where the money is already earned — the unmatched callout and the earnings screen, where
-  the households exist, the 30 days are served and the sum is real.
+  where the money is already earned — the unmatched callout and the dashboard money hero,
+  where the households exist, the 30 days are served and the sum is real.
 - **The same label over two different numbers.** "Need you 75" above a "Needs you 21" filter
   is two correct numbers and one broken screen. If a figure summarises the workload and a
   control filters it, they either agree or they are named differently enough that nobody has
-  to work out why they do not.
+  to work out why they do not. **Where a figure links to a filtered list, both must come from
+  the same predicate** — `needsYouIndividually` exists because the dashboard count and the
+  filter each computed their own answer and disagreed by 118.
+- **An owner column.** It read "Whose" and showed "You" / "The household" / "Lumo", which is
+  a concept from the state model rather than a fact about a customer; the first person to see
+  it asked what it meant. Ownership still decides what the `Needs you` filter contains and
+  what the detail panel asks for. It is not a thing to read in a row.
+- **A date on a batch that cannot send yet.** Nothing goes out before sign-off, so an
+  unapproved schedule shows "day 1, day 2, day 3". A date that slips because someone took a
+  day to read the email is a broken promise the product made to itself.
 
-## The two callouts that break the pattern
-
-Two states are worth more than a row, and both get a full-width callout above the list.
+## The one callout that breaks the pattern
 
 **Unmatched.** `unmatched_different_email` silently eats a £50: the household is on Lumo and
-earning, the firm did the work, and the row looks like a lead that never converted. The
-callout names the household, the amount at stake, and one action. Several stack, with the
-total exposed.
+earning, the firm did the work, and the row looks like a lead that never converted. It gets a
+full-width callout above the list, naming the households, the amount at stake and one action.
+This is the one place a multiplied total is honest — that money is already earned.
 
-**Data quality.** `held_no_email`, `held_unconfirmed` and `bounced` are the work this product
-asks for, and each is stated once in aggregate with the money attached: "28 households are
-missing an email address. That is £1,400 we cannot go after." An itemised list of 28 rows is
-a chore; one number with a total is an argument.
+**Data quality** — `held_no_email`, `held_unconfirmed`, `bounced` — used to be a second
+callout of the same kind, stated in aggregate *with a total*: "28 households are missing an
+email address. That is £1,400 we cannot go after." Both halves of that were wrong. The total
+prices the fix at 100% conversion (see the forbidden list), and the aggregate-only treatment
+came from believing the household was not the unit of work.
 
-**Aggregate the data problems, itemise the people.** `clicked` is the exception and is listed
-row by row with names, because those are twelve specific humans a firm would ring, and a name
-is what makes that possible. The distinction is the useful one: a data problem is a batch job,
-a warm lead is a person.
+It is: every one of those rows needs a *different* address, and only the firm has it. So they
+are rows in the `Needs you` filter, with the **argument** stated once above them and the
+reward quoted per household. Excluding them from that filter is what once made an account
+whose only outstanding work was 34 missing addresses report that nothing needed the firm.
+
+**The real distinction is per-list versus per-household, not aggregate versus itemised.** One
+sign-off releasing 118 households is per-list, so it appears once — on the dashboard and the
+campaign screen — and never as a row. Everything else that needs the firm is per-household
+and stays a row: `clicked` is twelve specific humans somebody would ring, and a name is what
+makes that call possible.
 
 The test for all of these is that someone in research spots them without being pointed at
 them.
 
 ## Interaction
 
-**The one-approval path.** `Your list` → read the import report → read the email exactly as
-it will arrive → approve. One button, one confirmation naming how many households will be
+**The one-approval path.** `Campaign` → read what became of the file → read the email exactly
+as it will arrive → approve. One button, one confirmation naming how many households will be
 contacted and over what period. Nothing is hidden behind "we'll take it from here".
+
+**The send schedule is a deliverability mechanism presented as a feature.** Several hundred
+emails leaving a young sending domain at once is the fastest way to get every later campaign
+filtered — for this firm and, on the shared rung, for every firm on the domain. So the
+throttle is stated rather than hidden, with the reason attached, and the daily rate is
+editable between 10 and 500. Said out loud it converts "why is this taking a fortnight" into
+"good, they know what they are doing".
+
+**Uploading another list does not become the only route.** The upload sits next to
+`partners@lumo.energy`, equally prominent, and asks for no column mapping, no header matching
+and no preview grid. Lumo doing that work *is* the promise; an upload screen that makes a firm
+tidy their own CSV breaks it while looking like a feature. A new file lands as `processing`
+with no outcome counts, because that is what actually happens.
 
 **The sender ladder, as a named research probe.** The email preview shows the From line, the
 reply-to and the authenticating domain, and offers the two rungs explicitly:
@@ -297,8 +354,12 @@ presented as a recommendation.
 
 **Secondary actions.** Click or tap a row for the detail: the four track states, the age, the
 money position, who supplied the row and on which import. Add a household is a secondary
-button on `Your list`, with the paste grid as the default form rather than a single-record
+panel on `Campaign`, with the paste grid as the default form rather than a single-record
 form — a firm adding one household by hand is the rare case now.
+
+**Row capping.** The table renders 150 rows and says "Showing 150 of 808" with a `Show more`.
+An 800-household book is realistic; 800 table rows makes the demo machine sluggish for a list
+nobody scrolls to the end of. It states the cap rather than truncating quietly.
 
 **Motion.** 150 to 200ms ease on opacity and transform only. The sheet slides, the dialog
 fades; nothing else animates. A simulated 400ms pause on approve, so the demo feels like it
@@ -313,8 +374,13 @@ did something rather than teleporting.
 - **Empty (no list at all).** One paragraph on what to send and where, and nothing else. This
   state is reachable in the app but has no persona, because a firm in it has not yet had the
   conversation that this product is downstream of.
-- **Empty (filtered).** "Nothing needs you" with a quiet route to the full list. This is a
-  good outcome and should read as one.
+- **Empty (filtered).** A message specific to the filter — "Nothing needs you", "Nobody is
+  earning yet", "Everyone has been emailed" — with a quiet route to the full list. Each is a
+  good outcome and should read as one. A single generic empty state here would claim nothing
+  needs the firm on a screen filtered to something else entirely.
+- **Processing.** A handed-over file with a row count and no outcome figures, saying so. Real
+  loading is asynchronous; a screen that implies otherwise turns a normal wait into a support
+  ticket, and a fabricated count into a fact somebody trusts.
 - **Error.** Not reachable — there is no network call in the app. The router renders a plain
   not-found for any path outside the demo base.
 - **Partial.** The normal case, and the whole point: a household can be emailed, signed up,
@@ -323,20 +389,27 @@ did something rather than teleporting.
   shows all four tracks.
 - **Incomplete data.** Common, because an imported back-book has gaps. A missing inverter
   make or battery size renders as an em dash, never as "unknown" and never as a zero. A
-  missing email is not a gap in a field, it is a held row, and it belongs in the fix callout.
+  missing email is not a gap in a field, it is a held row, and it belongs in `Needs you`.
 
 ## IA / nav fit
 
 Three destinations, no nesting, no back-stack except sheets and dialogs.
 
-- **Customers** — the default, and where anyone lands.
-- **Earnings** — the money, at company level.
-- **Your list** — everything to do with the campaign: what was imported, what the email says,
-  who confirmed permission, the newsletter link, and adding a household.
+- **Dashboard** — the default, and where anyone lands. Is this working?
+- **Customers** — one list, status and money together. Who, and how much?
+- **Campaign** — the files, the email, the schedule, the sender, the permission, and adding a
+  household. What goes out, when, from whom?
 
-`Your list` is deliberately one destination rather than a settings area. A firm looks at it
+**Retired, with redirects.** `earnings` → `customers?filter=earning`, `list` → `campaign`,
+`add` → `campaign`. An old link lands where the content went rather than on a 404.
+
+`Campaign` is deliberately one destination rather than a settings area. A firm looks at it
 twice — once to approve, once when they want to hand over another batch — and burying either
 behind a gear icon would be hiding the two things the product needs from them.
+
+**The dashboard is not a fourth list.** It links into `Customers` three times — from the
+money hero, from the attention panel, and implicitly from the funnel — and lists nothing
+itself. The moment it starts showing households it has become the screen it replaced.
 
 ## Design-guide impact
 

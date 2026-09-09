@@ -334,18 +334,29 @@ export function Field({
   );
 }
 
+/**
+ * A row of filters over one list.
+ *
+ * NOT `role="tablist"`, which is what this used to claim. Tabs promise a panel per
+ * tab, and a screen reader told "tab, 1 of 4" then given no `tabpanel` and no
+ * `aria-controls` has been misled about the structure of the page. These press in
+ * and out over a single list that stays put, which is exactly `aria-pressed`.
+ */
 export function SegmentedToggle<T extends string>({
   options,
   value,
   onChange,
+  label,
 }: {
   options: readonly { value: T; label: string; count?: number }[];
   value: T;
   onChange: (value: T) => void;
+  label: string;
 }) {
   return (
     <div
-      role="tablist"
+      role="group"
+      aria-label={label}
       className="flex gap-1 rounded-full border border-line bg-surface p-1 lg:inline-flex"
     >
       {options.map((option) => {
@@ -353,8 +364,8 @@ export function SegmentedToggle<T extends string>({
         return (
           <button
             key={option.value}
-            role="tab"
-            aria-selected={active}
+            type="button"
+            aria-pressed={active}
             onClick={() => onChange(option.value)}
             className={cx(
               'h-10 flex-1 rounded-full px-4 text-[14px] font-semibold transition-colors duration-150 lg:h-8 lg:flex-none lg:text-[13px]',
@@ -440,10 +451,19 @@ export function CopyButton({ value }: { value: string }) {
   );
 }
 
-/** An em dash, for data an imported back-book genuinely does not carry. */
-export function Missing({ label }: { label: string }) {
+/**
+ * An em dash, for data an imported back-book genuinely does not carry.
+ *
+ * `label` is optional because the same dash does two jobs: a missing field, where
+ * naming it explains the gap, and a figure that does not exist yet — an outcome
+ * count on a file still processing — where there is nothing to name.
+ */
+export function Missing({ label }: { label?: string }) {
   return (
-    <span className="text-ink-mute" title={`Not in the list you supplied: ${label}`}>
+    <span
+      className="text-ink-mute"
+      title={label ? `Not in the list you supplied: ${label}` : undefined}
+    >
       —
     </span>
   );

@@ -18,11 +18,14 @@ describe('persona coverage', () => {
   it('exercises every contact state across the three personas', () => {
     const seen = new Set(all.flatMap((p) => p.customers.map((c) => c.contact)));
     const missing = CONTACT_STATE_IDS.filter((id) => !seen.has(id));
-    // `imported` and `queued` are transient by nature: a row is only in them for as
-    // long as Lumo is mid-pass or mid-send. A fixture cannot sit in one honestly, and
-    // pretending otherwise would put a permanent "we are still checking" row on a
-    // real screen. Everything else must appear somewhere.
-    expect(missing).toEqual(['imported', 'queued']);
+    // Only `imported` is genuinely transient — a row is in it for as long as Lumo is
+    // mid-pass, and a fixture cannot sit there honestly.
+    //
+    // `queued` used to be excluded on the same reasoning and that was wrong. Once
+    // sending is throttled to protect the domain, a household waits its turn for
+    // days: Northfield has 288 of them. It is the most populous state on the screen
+    // the send schedule describes, not a flicker between two others.
+    expect(missing).toEqual(['imported']);
   });
 
   it('exercises every activation state', () => {
@@ -174,24 +177,67 @@ describe('fixture invariants', () => {
     }
   });
 
-  it('reconciles each import batch against the rows it produced', () => {
+  it('reconciles each loaded import batch against the rows it produced', () => {
     for (const p of all) {
       for (const batch of p.company.imports) {
+        // A batch still processing has produced no households and knows no outcomes.
+        // That is the state the file screen exists to show, not a gap in the fixture.
+        if (batch.status === 'processing') {
+          expect(batch.rowsLoaded, `${batch.id} cannot know a loaded count yet`).toBeNull();
+          expect(batch.rowsHeld, `${batch.id} cannot know a held count yet`).toBeNull();
+          expect(batch.rowsRejected, `${batch.id} cannot know a rejected count yet`).toBeNull();
+          expect(
+            p.customers.filter((c) => c.importBatchId === batch.id),
+            `${batch.id} must not have produced households yet`,
+          ).toEqual([]);
+          continue;
+        }
+
         const rows = p.customers.filter((c) => c.importBatchId === batch.id);
         expect(rows.length, `${p.id}/${batch.id} row count`).toBe(batch.rowsLoaded);
-        const held = rows.filter((c) =>
-          (HELD_STATES as readonly string[]).includes(c.contact),
-        );
+        const held = rows.filter((c) => (HELD_STATES as readonly string[]).includes(c.contact));
         expect(held.length, `${p.id}/${batch.id} held count`).toBe(batch.rowsHeld);
         expect(
-          batch.rowsLoaded + batch.rowsRejected,
+          (batch.rowsLoaded ?? 0) + (batch.rowsRejected ?? 0),
           `${p.id}/${batch.id} supplied should equal loaded plus rejected`,
         ).toBe(batch.rowsSupplied);
-        if (batch.rowsRejected > 0) {
+        if ((batch.rowsRejected ?? 0) > 0) {
           expect(batch.rejectedReason, `${batch.id} needs a reason`).toBeTruthy();
         }
       }
     }
+  });
+
+  it('schedules every sendable household exactly once', () => {
+    // The schedule is the answer to "when will the rest go out". A schedule that
+    // does not add up to the list is a promise the product cannot keep.
+    for (const p of all) {
+      const sendable = p.customers.filter(
+        (c) => !(HELD_STATES as readonly string[]).includes(c.contact),
+      );
+      const scheduled = p.company.schedule.reduce((total, b) => total + b.count, 0);
+      expect(scheduled, `${p.id} schedule should cover every sendable household`).toBe(
+        sendable.length,
+      );
+    }
+  });
+
+  it('never reports opens on a batch that has not been sent', () => {
+    for (const p of all) {
+      for (const batch of p.company.schedule) {
+        if (batch.status === 'sent') {
+          expect(batch.opened, `${p.id}/${batch.id} sent batch needs an open count`).not.toBeNull();
+          expect(batch.opened!).toBeLessThanOrEqual(batch.count);
+        } else {
+          expect(batch.opened, `${p.id}/${batch.id} has not sent yet`).toBeNull();
+        }
+      }
+    }
+  });
+
+  it('holds nothing back on a company that has not approved the email', () => {
+    const kestrel = all.find((p) => p.id === 'awaiting-approval')!;
+    expect(kestrel.company.schedule.every((b) => b.status === 'scheduled')).toBe(true);
   });
 });
 

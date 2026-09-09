@@ -1,59 +1,85 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { OWNER_GROUP_HEADINGS, REWARD_GBP } from '../state';
-import { displayName } from '../fixtures';
+import { useSearchParams } from 'react-router-dom';
 import { useDemoStore } from '../store/DemoStore';
 import {
-  actionQueue,
+  CUSTOMER_FILTERS,
   buildRows,
   dataQualityGroups,
-  earningCount,
-  earningsSummary,
-  gbp,
-  signedUpCount,
-  silentCohort,
+  filterRows,
+  isCustomerFilter,
   sortRows,
   unmatchedRows,
 } from '../selectors/customers';
-import type { CustomerRow, SortDirection, SortKey } from '../selectors/customers';
-import { CustomerDetail, CustomerCard } from '../components/CustomerRow';
+import type {
+  CustomerFilter,
+  CustomerRow,
+  SortDirection,
+  SortKey,
+} from '../selectors/customers';
+import { gbp } from '../selectors/customers';
+import { displayName } from '../fixtures';
+import { REWARD_GBP } from '../state';
+import { CustomerCard, CustomerDetail } from '../components/CustomerRow';
 import { CustomerTable } from '../components/CustomerTable';
 import { Sheet } from '../components/Sheet';
 import { HeldRowFixer, UnmatchedFixer } from '../components/Fixers';
-import {
-  Button,
-  Callout,
-  Card,
-  EmptyState,
-  ScreenTitle,
-  SectionHeading,
-  SegmentedToggle,
-  SummaryStrip,
-} from '../components/ui';
+import { Button, Callout, Card, EmptyState, ScreenTitle, SegmentedToggle } from '../components/ui';
 
-type View = 'queue' | 'all';
+/**
+ * One list of customers, and only one.
+ *
+ * There used to be two screens that both listed households — this one for progress
+ * and an earnings screen for money — and the reader had to hold both in their head
+ * and reconcile them. Money is now a column here, and the earnings screen is gone.
+ *
+ * The attention queue that used to open the app is now the `Needs you` filter. Same
+ * rows, same fixers, reachable in one click from the dashboard; it just no longer
+ * greets a first-time visitor with a list of chores instead of their campaign.
+ *
+ * The unmatched callout survives, and it is the only one left. A household earning
+ * with nothing tying it to the firm is money on the table that no amount of sorting
+ * will surface, because the row looks like an ordinary lead that never converted.
+ */
+
+/**
+ * How many rows to render before asking.
+ *
+ * An eight-hundred-row book is realistic and eight hundred table rows is not: it
+ * makes the tab sluggish on the machine the demo gets shown on, for a list nobody
+ * scrolls to the end of. The cap states itself rather than silently truncating.
+ */
+const PAGE = 150;
 
 export function CustomersPage() {
   const { customers, asOf, company } = useDemoStore();
-  const [view, setView] = useState<View>('queue');
+  const [params, setParams] = useSearchParams();
   const [open, setOpen] = useState<CustomerRow | null>(null);
   const [sort, setSort] = useState<SortKey>('priority');
   const [direction, setDirection] = useState<SortDirection>('desc');
+  const [limit, setLimit] = useState(PAGE);
+
+  // The filter lives in the URL so the dashboard can link straight to it, and so a
+  // filtered view is a thing you can send to a colleague.
+  const raw = params.get('filter');
+  const filter: CustomerFilter = isCustomerFilter(raw) ? raw : 'all';
 
   const rows = useMemo(() => buildRows(customers, asOf), [customers, asOf]);
-  const groups = useMemo(() => actionQueue(rows), [rows]);
   const unmatched = useMemo(() => unmatchedRows(rows), [rows]);
   const quality = useMemo(() => dataQualityGroups(rows), [rows]);
-  const silent = useMemo(() => silentCohort(rows), [rows]);
-  const summary = useMemo(() => earningsSummary(rows), [rows]);
+  const filtered = useMemo(() => filterRows(rows, filter), [rows, filter]);
+  const sorted = useMemo(() => sortRows(filtered, sort, direction), [filtered, sort, direction]);
+  const visible = useMemo(() => sorted.slice(0, limit), [sorted, limit]);
 
-  const queueRows = useMemo(() => groups.flatMap((g) => g.rows), [groups]);
-  /** Whether anything above the list is already carrying work in bulk. */
-  const grouped = unmatched.length > 0 || quality.length > 0;
-  const tableRows = useMemo(
-    () => sortRows(view === 'queue' ? queueRows : rows, sort, direction),
-    [view, queueRows, rows, sort, direction],
-  );
+  const setFilter = (next: CustomerFilter) => {
+    setLimit(PAGE);
+    if (next === 'all') {
+      params.delete('filter');
+      setParams(params, { replace: true });
+    } else {
+      params.set('filter', next);
+      setParams(params, { replace: true });
+    }
+  };
 
   const onSort = (key: SortKey) => {
     if (key === sort) {
@@ -64,70 +90,30 @@ export function CustomersPage() {
     }
   };
 
-  if (customers.length === 0) {
-    return (
-      <>
-        <ScreenTitle>Your customers</ScreenTitle>
-        <EmptyState
-          title="Nothing here yet"
-          body="Send us your list of past battery customers and we will load it, clean it and show you exactly what happened to every one of them."
-          action={
-            <Link to="list">
-              <Button>Get your customers on</Button>
-            </Link>
-          }
-        />
-        <p className="px-4 text-center text-[13px] text-ink-mute lg:px-0">
-          Nothing here is a forecast. You will only ever see households on a list you have
-          given us.
-        </p>
-      </>
-    );
-  }
-
-  const nothingSent = !company.campaignEmail.approved;
+  const counts = useMemo(
+    () =>
+      Object.fromEntries(
+        CUSTOMER_FILTERS.map((f) => [f.id, filterRows(rows, f.id).length]),
+      ) as Record<CustomerFilter, number>,
+    [rows],
+  );
 
   return (
     <>
-      <ScreenTitle count={rows.length}>Your customers</ScreenTitle>
+      <ScreenTitle
+        count={rows.length}
+        sub={`Everyone ${company.name} handed over, where they have got to, and what they are worth.`}
+      >
+        Customers
+      </ScreenTitle>
 
-      {nothingSent ? (
+      {unmatched.length > 0 ? (
         <div className="px-4 lg:px-0">
-          <Callout
-            title="Nothing has been sent yet"
-            body={`Your list is loaded and cleaned. We are waiting on you to approve the email we send on your behalf — it is the only sign-off we will ask you for, and it covers all ${rows.length} households.`}
-            action={
-              <Link to="list">
-                <Button>Read it and approve</Button>
-              </Link>
-            }
-          />
-        </div>
-      ) : (
-        // The funnel, not the workload. An earlier version led with "Need you 75",
-        // which contradicted the "Needs you 21" toggle a few pixels below it — the
-        // same words, a different scope, two numbers. The work is described by the
-        // callouts and the toggle, each next to the rows it refers to; the strip
-        // answers a different question, which is how the list is converting.
-        <SummaryStrip
-          items={[
-            { label: 'Signed up', value: String(signedUpCount(rows)) },
-            { label: 'Earning', value: String(earningCount(rows)), tone: 'accent' },
-            { label: 'Yours so far', value: gbp(summary.earnedGbp), tone: 'accent' },
-          ]}
-        />
-      )}
-
-      <div className="mt-4 space-y-3 px-4 lg:px-0">
-        {unmatched.length > 0 ? (
           <Callout
             tone="alarm"
             title={`${gbp(unmatched.length * REWARD_GBP)} of yours is going to nobody`}
-            money={undefined}
             body={`${
-              unmatched.length === 1
-                ? 'One household is'
-                : `${unmatched.length} households are`
+              unmatched.length === 1 ? 'One household is' : `${unmatched.length} households are`
             } on Lumo and running, but came in on their own rather than through your campaign, so nothing ties them to you. It will not fix itself.`}
             action={
               <Button variant="secondary" onClick={() => setOpen(unmatched[0])}>
@@ -135,154 +121,150 @@ export function CustomersPage() {
               </Button>
             }
           />
-        ) : null}
+        </div>
+      ) : null}
 
-        {/* No money figure on these, unlike the unmatched callout above. See the note
-            in `dataQualityGroups`: multiplying the count by £50 would price a fix at
-            a conversion rate nobody is going to hit. The rate is in the body copy,
-            per household, where it is true. */}
-        {quality.map((group) => (
-          <Callout
-            key={group.contact}
-            title={`${group.rows.length} ${group.label.toLowerCase()}`}
-            body={group.argument}
-            action={
-              <Button variant="secondary" onClick={() => setOpen(group.rows[0])}>
-                Start on these
-              </Button>
-            }
-          />
-        ))}
-      </div>
-
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 px-4 lg:px-0">
-        <SegmentedToggle<View>
-          value={view}
-          onChange={setView}
-          options={[
-            { value: 'queue', label: 'Needs you', count: queueRows.length },
-            { value: 'all', label: 'All', count: rows.length },
-          ]}
+      <div className="mt-4 px-4 lg:px-0">
+        <SegmentedToggle<CustomerFilter>
+          label="Filter customers"
+          value={filter}
+          onChange={setFilter}
+          options={CUSTOMER_FILTERS.map((f) => ({
+            value: f.id,
+            label: f.label,
+            count: counts[f.id],
+          }))}
         />
-        {silent && view === 'all' ? (
-          <p className="max-w-[52ch] text-[13px] text-ink-mute">
-            <span className="tnum font-semibold text-ink-soft">{silent.count}</span> were
-            delivered and never opened. We will not email those again — that is how a sending
-            domain dies, and it would slow the rest of your list down.
-          </p>
-        ) : null}
       </div>
 
-      {/* Desktop: one sortable table. */}
-      <div className="mt-3 hidden lg:block">
-        {tableRows.length === 0 ? (
-          <NothingToDo total={rows.length} grouped={grouped} onShowAll={() => setView("all")} />
-        ) : (
-          <CustomerTable
-            rows={tableRows}
-            sort={sort}
-            direction={direction}
-            onSort={onSort}
-            onOpen={setOpen}
-          />
-        )}
-      </div>
+      {/* The argument for doing the work, on the filter that shows the work. Each of
+          these rows genuinely needs its own address, so they stay as rows; what would
+          be daft is repeating the reasoning on all thirty-four of them. */}
+      {filter === 'attention' && quality.length > 0 ? (
+        <div className="mt-3 px-4 lg:px-0">
+          <Card className="p-4">
+            <ul className="space-y-2.5">
+              {quality.map((group) => (
+                <li key={group.contact}>
+                  <p className="text-[14px] font-semibold text-ink">
+                    {group.rows.length} {group.label.toLowerCase()}
+                  </p>
+                  <p className="text-[13px] leading-snug text-ink-soft">{group.argument}</p>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+      ) : null}
 
-      {/* Mobile: owner-grouped cards. No table, because a table at 390px is unreadable. */}
-      <div className="lg:hidden">
-        {view === 'queue' ? (
-          groups.length === 0 ? (
-            <NothingToDo total={rows.length} grouped={grouped} onShowAll={() => setView("all")} />
-          ) : (
-            groups.map((group) => (
-              <section key={group.owner}>
-                <SectionHeading count={group.rows.length}>
-                  {OWNER_GROUP_HEADINGS[group.owner]}
-                </SectionHeading>
-                <Card className="mx-4 overflow-hidden">
-                  <ul>
-                    {group.rows.map((row) => (
-                      <CustomerCard key={row.customer.id} row={row} onOpen={setOpen} />
-                    ))}
-                  </ul>
-                </Card>
-              </section>
-            ))
-          )
-        ) : (
-          <section>
-            <SectionHeading count={rows.length}>Everyone on your list</SectionHeading>
+      {sorted.length === 0 ? (
+        <div className="mt-3">
+          <EmptyForFilter filter={filter} onShowAll={() => setFilter('all')} />
+        </div>
+      ) : (
+        <>
+          {/* Desktop: one sortable table. */}
+          <div className="mt-3 hidden lg:block">
+            <CustomerTable
+              rows={visible}
+              sort={sort}
+              direction={direction}
+              onSort={onSort}
+              onOpen={setOpen}
+            />
+          </div>
+
+          {/* Mobile: cards. A table at 390px is unreadable. */}
+          <div className="mt-3 lg:hidden">
             <Card className="mx-4 overflow-hidden">
               <ul>
-                {sortRows(rows, 'priority', 'desc').map((row) => (
+                {visible.map((row) => (
                   <CustomerCard key={row.customer.id} row={row} onOpen={setOpen} />
                 ))}
               </ul>
             </Card>
-          </section>
-        )}
-      </div>
+          </div>
+
+          {sorted.length > visible.length ? (
+            <div className="mt-3 flex flex-wrap items-center gap-3 px-4 lg:px-0">
+              <Button variant="secondary" onClick={() => setLimit((n) => n + PAGE)}>
+                Show {Math.min(PAGE, sorted.length - visible.length)} more
+              </Button>
+              <p className="text-[13px] text-ink-mute">
+                Showing {visible.length.toLocaleString('en-GB')} of{' '}
+                {sorted.length.toLocaleString('en-GB')}.
+              </p>
+            </div>
+          ) : null}
+        </>
+      )}
 
       <Sheet
         open={open !== null}
-        title={open ? displayName(open.customer) : ''}
+        title={open ? displayName(open.customer) : 'Household'}
         onClose={() => setOpen(null)}
       >
-        {open ? (
-          <>
-            <Fixer row={open} onDone={() => setOpen(null)} />
-            <CustomerDetail row={open} />
-          </>
-        ) : null}
+        {open ? <Detail row={open} onDone={() => setOpen(null)} /> : null}
       </Sheet>
     </>
   );
 }
 
 /**
- * The one place a row becomes editable, and only for the three things Lumo genuinely
- * cannot resolve without the firm. Everything else in this product is read-only,
- * which is the point.
+ * The detail panel, and the only place the product asks for anything.
+ *
+ * Which fixer appears is decided by ownership — the concept the dropped `Whose`
+ * column was trying and failing to communicate. It works here because it arrives as
+ * a specific question about one household rather than as a label to interpret.
  */
-function Fixer({ row, onDone }: { row: CustomerRow; onDone: () => void }) {
-  if (row.resolved.track === 'match' && row.customer.match === 'unmatched_different_email') {
-    return <UnmatchedFixer row={row} onDone={onDone} />;
-  }
-  if (row.customer.contact === 'held_no_email' || row.customer.contact === 'held_unconfirmed') {
-    return <HeldRowFixer row={row} onDone={onDone} />;
-  }
-  return null;
+function Detail({ row, onDone }: { row: CustomerRow; onDone: () => void }) {
+  const held = row.customer.contact === 'held_no_email' || row.customer.contact === 'held_unconfirmed';
+
+  return (
+    <>
+      <CustomerDetail row={row} />
+      {row.resolved.track === 'match' ? <UnmatchedFixer row={row} onDone={onDone} /> : null}
+      {held ? <HeldRowFixer row={row} onDone={onDone} /> : null}
+    </>
+  );
 }
 
-/**
- * The empty queue has to know what is above it.
- *
- * On the awaiting-approval persona this sat under an unapproved campaign and 34 held
- * rows and said "Nothing needs you", which was flatly untrue and made the callouts
- * look like decoration. An empty state that contradicts the screen it is on is worse
- * than no empty state.
- */
-function NothingToDo({
-  total,
-  grouped,
+function EmptyForFilter({
+  filter,
   onShowAll,
 }: {
-  total: number;
-  grouped: boolean;
+  filter: CustomerFilter;
   onShowAll: () => void;
 }) {
+  const copy: Record<CustomerFilter, { title: string; body: string }> = {
+    all: {
+      title: 'No customers yet',
+      body: 'Once you have handed over a list, every household lands here.',
+    },
+    attention: {
+      title: 'Nothing needs you',
+      body: 'Every household is either earning, waiting on something that resolves itself, or one we have stopped chasing. This is the good outcome.',
+    },
+    earning: {
+      title: 'Nobody is earning yet',
+      body: 'A household earns once it has signed up, connected its battery and run smart control for 30 consecutive days.',
+    },
+    not_emailed: {
+      title: 'Everyone has been emailed',
+      body: 'Your whole list has had the campaign email. Nothing is queued.',
+    },
+  };
+
   return (
     <EmptyState
-      title={grouped ? 'Nothing else needs you one at a time' : 'Nothing needs you'}
-      body={
-        grouped
-          ? 'Your attention goes to the groups above. Every other household is either earning, waiting on something that resolves itself, or one we have stopped chasing.'
-          : 'Every household is either earning, waiting on something that resolves itself, or one we have stopped chasing. This is the good outcome.'
-      }
+      title={copy[filter].title}
+      body={copy[filter].body}
       action={
-        <Button variant="secondary" onClick={onShowAll}>
-          See all {total.toLocaleString('en-GB')}
-        </Button>
+        filter === 'all' ? undefined : (
+          <Button variant="secondary" onClick={onShowAll}>
+            See all customers
+          </Button>
+        )
       }
     />
   );

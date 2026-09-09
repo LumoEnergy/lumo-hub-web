@@ -18,10 +18,18 @@ import { currentSeat } from '../fixtures';
  * attribution model that cannot be paid.
  */
 
+/**
+ * Three destinations, and the order is the argument.
+ *
+ * Dashboard answers "is this working", Customers answers "who and how much", and
+ * Campaign answers "what goes out, when, from whom". A fourth tab for earnings used
+ * to sit in the middle listing the same households as Customers, which made the
+ * reader hold two lists in their head; money is a column and a headline now.
+ */
 const NAV = [
-  { to: '', label: 'Customers', end: true, icon: ListIcon },
-  { to: 'earnings', label: 'Earnings', end: false, icon: MoneyIcon },
-  { to: 'list', label: 'Your list', end: false, icon: InboxIcon },
+  { to: '', label: 'Dashboard', end: true, icon: ChartIcon },
+  { to: 'customers', label: 'Customers', end: false, icon: ListIcon },
+  { to: 'campaign', label: 'Campaign', end: false, icon: InboxIcon },
 ] as const;
 
 export function Shell() {
@@ -155,19 +163,16 @@ function ListIcon() {
   );
 }
 
-function MoneyIcon() {
+function ChartIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <rect
-        x="2.5"
-        y="5"
-        width="15"
-        height="10"
-        rx="2"
+      <path
+        d="M3.25 16.75V9.5M8.417 16.75V3.25M13.583 16.75v-5.5"
         stroke="currentColor"
         strokeWidth="1.6"
+        strokeLinecap="round"
       />
-      <circle cx="10" cy="10" r="2.25" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M17.5 16.75H2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }

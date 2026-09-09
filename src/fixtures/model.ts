@@ -128,27 +128,72 @@ export interface HubSeat {
 }
 
 /**
- * A batch of households the firm handed over.
+ * A file of households the firm handed over, and what became of it.
  *
  * The first imports are done by hand by Lumo staff from a spreadsheet the installer
  * emails over. That is the right call for the first few firms — it converts far
  * better than asking them to learn an upload screen, and it is how you find out what
  * real lists look like. It is also exactly why the outcome per row needs a real home
  * rather than living in whichever spreadsheet the person doing it kept.
+ *
+ * PROCESSING IS ASYNCHRONOUS AND THE UI MUST SAY SO. Loading a book means matching
+ * against existing Lumo accounts, de-duplicating within and across files, and
+ * deciding which rows are unusable — minutes to hours, not the length of a page
+ * load. A screen that implies otherwise turns a normal wait into a bug report. So a
+ * batch arrives with a row count it can state immediately and outcome counts that
+ * are honestly `null` until the work is done.
  */
 export interface ImportBatch {
   readonly id: string;
+  /** `null` for households typed in by hand rather than arriving in a file. */
+  readonly filename: string | null;
+  /**
+   * How it reached Lumo. `emailed` is the concierge path and is deliberately first
+   * among equals: for the firms that matter now, "send us your book" converts far
+   * better than any upload screen.
+   */
+  readonly arrivedBy: 'emailed' | 'uploaded' | 'by_hand';
+  readonly status: 'processing' | 'loaded';
   readonly suppliedBy: string;
   readonly suppliedOn: string;
   /** Free text, because the answer is genuinely "a Commusoft export" or "an email". */
   readonly source: string;
+  /** Countable the moment the file lands, so it is known even while processing. */
   readonly rowsSupplied: number;
-  readonly rowsLoaded: number;
-  /** Held back because only the installer can resolve them. */
-  readonly rowsHeld: number;
-  readonly rowsRejected: number;
+  /** `null` while `status` is `processing`. Nothing is known about outcomes yet. */
+  readonly rowsLoaded: number | null;
+  /** Held back because only the installer can resolve them. `null` while processing. */
+  readonly rowsHeld: number | null;
+  readonly rowsRejected: number | null;
   /** Why rows were dropped outright, e.g. exact duplicates. `null` when none were. */
   readonly rejectedReason: string | null;
+}
+
+/**
+ * One day's worth of sending.
+ *
+ * THE SCHEDULE IS A DELIVERABILITY MECHANISM, NOT A CONVENIENCE. Eight hundred
+ * emails leaving a young sending domain in one minute is the single most reliable
+ * way to get every subsequent campaign filtered — for this installer and, because
+ * the domain is shared at the lower rung, for every other installer too. Throttling
+ * is what makes the channel survive contact with Gmail.
+ *
+ * It is exposed rather than hidden because it is also the honest answer to "when
+ * will I see something?", and because a firm with a reason to go slower or faster —
+ * a holiday, a van off the road, an engineer who wants to field the replies — should
+ * be able to say so without emailing us.
+ */
+export interface SendBatch {
+  readonly id: string;
+  /**
+   * ISO date. Meaningless until the campaign is approved, because the clock starts
+   * at sign-off — the UI shows unapproved batches as "day 1, day 2" instead.
+   */
+  readonly date: string;
+  readonly count: number;
+  readonly status: 'sent' | 'sending' | 'scheduled';
+  /** How many of that batch opened it. `null` for anything not yet sent. */
+  readonly opened: number | null;
 }
 
 /**
@@ -177,6 +222,9 @@ export interface HubCompany {
   readonly attestation: Attestation | null;
   readonly campaignEmail: CampaignEmail;
   readonly imports: readonly ImportBatch[];
+  readonly schedule: readonly SendBatch[];
+  /** Households per sending day. Lower for a domain that has not warmed up yet. */
+  readonly dailySendCap: number;
   /**
    * A COMPANY link for the firm's own channels — a customer newsletter, a Facebook
    * group, the "check your battery" email they already send. Deliberately not a
@@ -300,7 +348,15 @@ export const COMPANY_FIELD_PROVENANCE: Readonly<Record<keyof HubCompany, Provena
   },
   imports: {
     source: 'no-producer',
-    note: 'There is no bulk ingestion path and no notion of a row received but held back as unusable. The first imports are done by hand, which is why the outcomes still need a real home.',
+    note: 'There is no bulk ingestion path and no notion of a row received but held back as unusable. The first imports are done by hand, which is why the outcomes still need a real home. Asynchronous processing also needs a job with a status a screen can poll, not a request that blocks.',
+  },
+  schedule: {
+    source: 'no-producer',
+    note: 'Nothing schedules outbound mail. All email today is transactional and sends immediately on an event, so there is no queue, no per-day cap and no notion of a send that has not happened yet. This is what protects the sending domain, so it cannot be left until later.',
+  },
+  dailySendCap: {
+    source: 'no-producer',
+    note: 'As schedule. The cap has to be per-company and adjustable, because a shared sending domain at the lower rung means one firm blasting their book damages delivery for every other firm on it.',
   },
   selfServeLinkToken: {
     source: 'no-producer',

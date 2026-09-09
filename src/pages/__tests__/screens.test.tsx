@@ -1,19 +1,19 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import type { PersonaId } from '../../fixtures';
 import { DemoStoreProvider } from '../../store/DemoStore';
+import { DashboardPage } from '../DashboardPage';
 import { CustomersPage } from '../CustomersPage';
-import { EarningsPage } from '../EarningsPage';
-import { YourListPage } from '../YourListPage';
+import { CampaignPage } from '../CampaignPage';
 
 afterEach(cleanup);
 
-const mount = (persona: PersonaId, element: ReactElement) =>
+const mount = (persona: PersonaId, element: ReactElement, route = '/') =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[route]}>
       <DemoStoreProvider personaId={persona}>
         <Routes>
           <Route path="*" element={element} />
@@ -24,28 +24,129 @@ const mount = (persona: PersonaId, element: ReactElement) =>
 
 const bodyText = () => document.body.textContent ?? '';
 
+const ALL_PERSONAS = ['mid-campaign', 'awaiting-approval', 'messy-list'] as const;
+
+describe('the dashboard', () => {
+  it('leads with the money and the funnel, not with a list of chores', () => {
+    mount('mid-campaign', <DashboardPage />);
+    const text = bodyText();
+    expect(text).toMatch(/Earned by Northfield Renewables/);
+    expect(text).toMatch(/Where your customers are/);
+    // The queue that used to be the landing page is now one route through, not the
+    // first thing anyone sees.
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  it('shows every journey stage, in order, narrowing', () => {
+    mount('mid-campaign', <DashboardPage />);
+    const panel = screen.getByRole('region', { name: 'Where your customers are' });
+    const labels = within(panel)
+      .getAllByRole('listitem')
+      .map((li) => li.textContent ?? '');
+    expect(labels[0]).toMatch(/On your list/);
+    expect(labels[1]).toMatch(/Emailed/);
+    expect(labels[2]).toMatch(/Delivered/);
+    expect(labels[3]).toMatch(/Opened/);
+    expect(labels[4]).toMatch(/Signed up/);
+    expect(labels[5]).toMatch(/Earning/);
+  });
+
+  it('accounts for everyone the funnel drops, so nobody looks lost', () => {
+    // "808 on the list, 486 emailed" invites the worst assumption about the other
+    // 322 unless the screen says where they went.
+    mount('mid-campaign', <DashboardPage />);
+    const text = bodyText();
+    expect(text).toMatch(/Queued to send/);
+    expect(text).toMatch(/No usable address/);
+    expect(text).toMatch(/Stopped chasing/);
+  });
+
+  it('says when the rest goes out and why it is throttled', () => {
+    mount('mid-campaign', <DashboardPage />);
+    const text = bodyText();
+    expect(text).toMatch(/100 a day rather than all at once/);
+    expect(text).toMatch(/inbox providers keep trusting your list/i);
+  });
+
+  it('leads with the approval, and no money, before anything has sent', () => {
+    mount('awaiting-approval', <DashboardPage />);
+    const text = bodyText();
+    expect(text).toMatch(/Nothing has been sent yet/i);
+    expect(text).toMatch(/only sign-off/i);
+    expect(text).not.toMatch(/Earned by/);
+  });
+
+  it('shows the schedule as a shape, not as dates, before sign-off', () => {
+    // The dates are meaningless until approval starts the clock, and a date that
+    // slips because someone took a day to read the email reads as a broken promise.
+    mount('awaiting-approval', <DashboardPage />);
+    const text = bodyText();
+    expect(text).toMatch(/Day 1/);
+    expect(text).toMatch(/after you approve/i);
+  });
+
+  it('never shows a forecast, in any persona', () => {
+    // A dashboard is exactly where "at this rate you would earn" feels natural and
+    // exactly where it does the most damage.
+    for (const persona of ALL_PERSONAS) {
+      cleanup();
+      mount(persona, <DashboardPage />);
+      expect(bodyText(), persona).not.toMatch(
+        /could earn|you could|projected|per year|annually|estimate|on track for/i,
+      );
+    }
+  });
+});
+
 describe('the customers screen', () => {
   it('leads with the company, never a person', () => {
     mount('mid-campaign', <CustomersPage />);
-    expect(screen.getByRole('heading', { name: /Your customers/ })).toBeTruthy();
-    // The seat holder's name may appear as "supplied by" data, but the money and the
-    // account belong to the firm. Nothing may offer a personal link or QR.
+    expect(screen.getByRole('heading', { name: /Customers/ })).toBeTruthy();
     expect(bodyText()).not.toMatch(/your link|personal link|QR/i);
   });
 
-  it('aggregates the missing addresses and prices them per household', () => {
+  it('is one list, with the money as a column', () => {
+    // There used to be two screens both listing the same households, one for
+    // progress and one for money, and the reader had to reconcile them.
     mount('mid-campaign', <CustomersPage />);
-    const text = bodyText();
-    expect(text).toMatch(/missing an email address/i);
-    // The rate, which is true. Not 28 x £50, which assumes every one converts.
-    expect(text).toMatch(/each one that signs up and stays connected for 30 days is £50/i);
-    expect(text).not.toMatch(/£1,400/);
+    const table = screen.getByRole('table');
+    const headers = within(table).getAllByRole('columnheader');
+    expect(headers.map((h) => h.textContent?.trim().replace(/[↑↓↕]/g, ''))).toEqual([
+      'Household',
+      'Status',
+      'Waiting',
+      'Reward',
+      'Open',
+    ]);
   });
 
-  it('states the silent majority once rather than as a hundred rows', () => {
+  it('has no owner column, because nobody knew what it meant', () => {
+    // It read "Whose" and showed "You" / "The household" / "Lumo" — a concept from
+    // the state model rather than a fact about the customer. Ownership still drives
+    // the attention filter and the detail panel; it is not a thing to read in a row.
     mount('mid-campaign', <CustomersPage />);
-    // Under "Needs you" it is absent entirely; the cohort note only appears on All.
-    expect(bodyText()).not.toMatch(/never opened/i);
+    const table = screen.getByRole('table');
+    expect(table.textContent).not.toMatch(/Whose/);
+    expect(within(table).queryByText('The household')).toBeNull();
+  });
+
+  it('offers the four filters a firm actually arrives with', () => {
+    mount('mid-campaign', <CustomersPage />);
+    const group = screen.getByRole('group', { name: 'Filter customers' });
+    const labels = within(group)
+      .getAllByRole('button')
+      .map((b) => b.textContent?.replace(/\d+$/, '').trim());
+    expect(labels).toEqual(['All', 'Needs you', 'Earning', 'Not emailed yet']);
+  });
+
+  it('opens on the attention filter when the dashboard sends you there', () => {
+    mount('mid-campaign', <CustomersPage />, '/?filter=attention');
+    const group = screen.getByRole('group', { name: 'Filter customers' });
+    const pressed = within(group)
+      .getAllByRole('button')
+      .filter((b) => b.getAttribute('aria-pressed') === 'true');
+    expect(pressed).toHaveLength(1);
+    expect(pressed[0].textContent).toMatch(/Needs you/);
   });
 
   it('surfaces the uncredited household above everything else', () => {
@@ -53,63 +154,27 @@ describe('the customers screen', () => {
     expect(bodyText()).toMatch(/going to nobody/i);
   });
 
-  it('renders a real sortable table for desktop', () => {
+  it('caps the rendered rows and says so rather than truncating quietly', () => {
     mount('mid-campaign', <CustomersPage />);
-    const table = screen.getByRole('table');
-    const headers = within(table).getAllByRole('columnheader');
-    expect(headers.map((h) => h.textContent?.trim().replace(/[↑↓↕]/g, ''))).toEqual([
-      'Household',
-      'Status',
-      'Whose',
-      'Age',
-      'Reward',
-      'Open',
-    ]);
-    // The default order is not a column, so no header can claim it. Saying so beats
-    // an unexplained order or a fake aria-sort on Household.
-    expect(headers.every((h) => h.getAttribute('aria-sort') !== 'descending')).toBe(true);
-    expect(bodyText()).toMatch(/Sorted by what needs you first/i);
-  });
-
-  it('asks for the one approval when nothing has been sent', () => {
-    mount('awaiting-approval', <CustomersPage />);
-    const text = bodyText();
-    expect(text).toMatch(/Nothing has been sent yet/i);
-    expect(text).toMatch(/only sign-off/i);
-    // No earnings figure before a send. The per-household rate in the data-quality
-    // copy is fine; a total on this screen would be a projection.
-    expect(text).not.toMatch(/Yours so far/);
+    const rows = within(screen.getByRole('table')).getAllByRole('row');
+    // 150 body rows plus the header.
+    expect(rows.length).toBe(151);
+    expect(bodyText()).toMatch(/Showing 150 of 8\d\d/);
   });
 
   it('does not repeat the one approval on all 118 rows', () => {
-    // The failure mode this whole screen exists to avoid. One sign-off releases the
-    // list, so it belongs in the callout, not stamped on every household — which
-    // leaves the per-row queue genuinely empty until someone approves.
-    mount('awaiting-approval', <CustomersPage />);
-    expect(screen.queryByRole('table')).toBeNull();
-    expect(bodyText()).toMatch(/Nothing else needs you one at a time/i);
+    // One sign-off releases the whole list, so it belongs on the dashboard and the
+    // campaign screen, not stamped on every household as an individual task. What
+    // is legitimately here is the 34 rows only the firm can unblock — a missing
+    // address is genuinely per-household work.
+    mount('awaiting-approval', <CustomersPage />, '/?filter=attention');
+    const rows = within(screen.getByRole('table')).getAllByRole('row');
+    expect(rows.length).toBe(35);
     expect(bodyText()).not.toMatch(/Approve the email/);
   });
 
-  it('does not put the same label on two different numbers', () => {
-    // The strip counts the funnel; the toggle counts the queue. When the strip said
-    // "Need you 75" directly above a "Needs you 21" toggle, both were correct and
-    // the screen was still wrong.
-    mount('mid-campaign', <CustomersPage />);
-    expect(bodyText()).not.toMatch(/Need you/);
-    expect(bodyText()).toMatch(/Signed up/);
-  });
-
-  it('does not claim nothing needs you while callouts say otherwise', () => {
-    mount('awaiting-approval', <CustomersPage />);
-    const text = bodyText();
-    expect(text).toMatch(/missing an email address/i);
-    expect(text).toMatch(/Nothing else needs you one at a time/i);
-    expect(text).not.toMatch(/Nothing needs you\b/);
-  });
-
   it('never shows a forecast, in any persona', () => {
-    for (const persona of ['mid-campaign', 'awaiting-approval', 'messy-list'] as const) {
+    for (const persona of ALL_PERSONAS) {
       cleanup();
       mount(persona, <CustomersPage />);
       expect(bodyText(), persona).not.toMatch(
@@ -119,35 +184,14 @@ describe('the customers screen', () => {
   });
 });
 
-describe('the earnings screen', () => {
-  it('states who gets paid, and it is the firm', () => {
-    mount('mid-campaign', <EarningsPage />);
-    expect(bodyText()).toMatch(/Paid to Northfield Renewables/);
+describe('the campaign screen', () => {
+  it('is not called "your list", which read as a page about people', () => {
+    mount('mid-campaign', <CampaignPage />);
+    expect(screen.getByRole('heading', { name: 'Campaign' })).toBeTruthy();
   });
 
-  it('spells out the clawback rule where control has since dropped', () => {
-    mount('mid-campaign', <EarningsPage />);
-    expect(bodyText()).toMatch(/not reversed/i);
-  });
-
-  it('leaves the un-signed-up hundreds off the money screen', () => {
-    // Every non-responder is technically "not earning". Listing them would bury the
-    // twenty that are, and there is nothing to do about them here.
-    mount('mid-campaign', <EarningsPage />);
-    expect(bodyText()).not.toMatch(/No response/);
-  });
-
-  it('shows nothing and promises nothing before a send', () => {
-    mount('awaiting-approval', <EarningsPage />);
-    const text = bodyText();
-    expect(text).toMatch(/Nothing yet, and no guesses/i);
-    expect(text).not.toMatch(/could earn|projected|per year/i);
-  });
-});
-
-describe('the your-list screen', () => {
   it('reports what was loaded, held and rejected, with the reason', () => {
-    mount('mid-campaign', <YourListPage />);
+    mount('mid-campaign', <CampaignPage />);
     const text = bodyText();
     expect(text).toMatch(/You sent/);
     expect(text).toMatch(/We loaded/);
@@ -156,72 +200,119 @@ describe('the your-list screen', () => {
     expect(text).toMatch(/exact duplicates/i);
   });
 
-  it('breaks down the held figure into numbers that sum to it', () => {
-    mount('mid-campaign', <YourListPage />);
-    const panel = screen.getByRole('region', { name: 'What we loaded' });
+  it('names the file and how it reached us, so the receipt is real', () => {
+    mount('mid-campaign', <CampaignPage />);
+    const text = bodyText();
+    expect(text).toMatch(/commusoft-battery-jobs-2021-2026\.csv/);
+    expect(text).toMatch(/Emailed to us by Ade Bankole/);
+  });
+
+  it('shows a file still being worked through, with no outcome figures invented', () => {
+    // Loading a book is asynchronous. A screen that implies otherwise turns a normal
+    // wait into a support ticket, and a fabricated count into a trusted fact.
+    mount('mid-campaign', <CampaignPage />);
+    const text = bodyText();
+    expect(text).toMatch(/new-fits-jan-to-aug\.csv/);
+    expect(text).toMatch(/Still processing/);
+    expect(text).toMatch(/We will email Sean Docherty when it is done/);
+  });
+
+  it('takes another list either way, and does not ask them to tidy it', () => {
+    mount('mid-campaign', <CampaignPage />);
+    const text = bodyText();
+    expect(screen.getByRole('button', { name: /Add another list/ })).toBeTruthy();
+    expect(text).toMatch(/partners@lumo\.energy/);
+    expect(text).toMatch(/columns in any order, nobody needs to tidy it/i);
+  });
+
+  it('breaks the send into days and lets them change the rate', () => {
+    mount('mid-campaign', <CampaignPage />);
+    const panel = screen.getByRole('region', { name: 'When it goes out' });
     const text = panel.textContent ?? '';
-    // A bounce is campaign feedback, not an import outcome. Listing it here made a
-    // "Held back: 34" headline break down into 28 + 6 + 18.
-    expect(text).toMatch(/28 missing an email address/i);
-    expect(text).toMatch(/6 battery not confirmed/i);
-    expect(text).not.toMatch(/bounced/i);
+    expect(text).toMatch(/100 households/);
+    expect(text).toMatch(/opened/);
+    expect(within(panel).getByLabelText('Emails a day')).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: /Update schedule/ })).toBeTruthy();
+  });
+
+  it('explains the throttle as deliverability, not as a queue we happen to have', () => {
+    mount('mid-campaign', <CampaignPage />);
+    expect(bodyText()).toMatch(/treat the rest of your list as spam/i);
   });
 
   it('shows the email exactly as it arrives, sent as the firm', () => {
-    mount('mid-campaign', <YourListPage />);
+    mount('mid-campaign', <CampaignPage />);
     const text = bodyText();
     expect(text).toMatch(/Northfield Renewables/);
     expect(text).toMatch(/hello@northfieldrenewables\.co\.uk/);
-    // Lumo is named as the deliverer, not as the sender.
     expect(text).toMatch(/on behalf of Northfield Renewables/i);
   });
 
+  it('is honest about the via note on the domain it actually sends from', () => {
+    // Northfield is on the shared rung, so the customer sees "via
+    // send.lumopartners.co.uk". Hiding that would demo a configuration nobody has.
+    mount('mid-campaign', <CampaignPage />);
+    expect(bodyText()).toMatch(/via send\.lumopartners\.co\.uk/);
+  });
+
   it('offers the sender ladder as a question rather than a recommendation', () => {
-    mount('mid-campaign', <YourListPage />);
+    mount('mid-campaign', <CampaignPage />);
     const text = bodyText();
     expect(text).toMatch(/Send from Lumo's domain/);
     expect(text).toMatch(/Send from your own domain/);
     expect(text).toMatch(/Two DNS records/);
-    // The impersonation objection has to be defused explicitly and accurately.
     expect(text).toMatch(/not us pretending to be you/i);
   });
 
+  it('keeps the DNS detail collapsed until asked for', () => {
+    mount('mid-campaign', <CampaignPage />);
+    const toggle = screen.getByRole('button', { name: /What the DNS change involves/ });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(bodyText()).not.toMatch(/v=spf1/);
+  });
+
+  it('gives the real records, and says the main domain is untouched', () => {
+    mount('mid-campaign', <CampaignPage />);
+    fireEvent.click(screen.getByRole('button', { name: /What the DNS change involves/ }));
+    const text = bodyText();
+    expect(text).toMatch(/CNAME/);
+    expect(text).toMatch(/v=spf1 include:lumopartners\.co\.uk/);
+    expect(text).toMatch(/Your main domain is not touched/i);
+  });
+
   it('records who confirmed permission and when', () => {
-    mount('mid-campaign', <YourListPage />);
+    mount('mid-campaign', <CampaignPage />);
     expect(bodyText()).toMatch(/Confirmed by Ade Bankole/);
   });
 
   it('frames the company link as newsletter content, not as a way to add someone', () => {
-    mount('mid-campaign', <YourListPage />);
+    mount('mid-campaign', <CampaignPage />);
     const text = bodyText();
     expect(text).toMatch(/not a way to add someone/i);
     expect(text).toMatch(/lumo\.energy\/j\/northfield/);
   });
 
   it('puts the paste grid first, and asks for no kit detail', () => {
-    mount('mid-campaign', <YourListPage />);
+    mount('mid-campaign', <CampaignPage />);
     expect(screen.getByLabelText('Name, row 1')).toBeTruthy();
     expect(screen.getByLabelText('Email, row 1')).toBeTruthy();
     expect(screen.getByLabelText('Postcode, row 1')).toBeTruthy();
-    // Three columns and no more. A back-book export does not carry kit detail, so a
-    // battery-size field would collect a guess and then be trusted like a fact.
-    // Scoped to the form: the email body mentions an inverter, which is fine.
     const form = screen.getByLabelText('Name, row 1').closest('section');
     expect(form?.textContent).not.toMatch(/inverter|battery/i);
   });
 
   it('leads with the approval when it is outstanding', () => {
-    mount('awaiting-approval', <YourListPage />);
+    mount('awaiting-approval', <CampaignPage />);
     const text = bodyText();
     expect(text).toMatch(/Read it, then approve it once/i);
     expect(text).toMatch(/Approve and send to 118/);
-    expect(text).toMatch(/Waiting on you/);
+    expect(text).toMatch(/Starts the day after you approve/);
   });
 
   it('never asks the firm to report work they did themselves', () => {
-    for (const persona of ['mid-campaign', 'awaiting-approval', 'messy-list'] as const) {
+    for (const persona of ALL_PERSONAS) {
       cleanup();
-      mount(persona, <YourListPage />);
+      mount(persona, <CampaignPage />);
       expect(bodyText(), persona).not.toMatch(
         /mark as sent|I(?:'| have)?ve sent|confirm you sent/i,
       );

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { HubCompany } from '../fixtures';
 
 /**
@@ -87,26 +88,105 @@ export function EmailPreview({ company }: { company: HubCompany }) {
  */
 export function SenderLadder({ company }: { company: HubCompany }) {
   const { sender } = company;
+  const [showSetup, setShowSetup] = useState(false);
+  const onLumoDomain = sender.rung === 'lumo_domain';
 
   return (
     <div className="space-y-2">
       <Rung
-        active={sender.rung === 'lumo_domain'}
+        active={onLumoDomain}
         title="Send from Lumo's domain"
         cost="Nothing to set up"
-        body={`Arrives as "${sender.displayName}", with replies coming back to you. Some email apps add a small "via" note showing it was sent through Lumo. Ready immediately.`}
+        body={`Arrives as "${sender.displayName}", with replies coming back to you. Gmail and Outlook add a small "via ${sender.sendingDomain}" note under your name — most people never notice it, some do.`}
       />
       <Rung
         active={sender.rung === 'delegated_subdomain'}
         title="Send from your own domain"
         cost="Two DNS records"
-        body="You publish two records we give you, on a subdomain of your own domain. The email then authenticates as you rather than as us, and your main domain's reputation stays separate from it. Ten minutes for whoever looks after your website."
+        body="You publish two records we give you, on a subdomain of your own domain. The 'via' note disappears, the email authenticates as you rather than as us, and your main domain's reputation stays insulated from it. Ten minutes for whoever looks after your website."
         verified={sender.delegationVerified}
       />
+
+      {onLumoDomain ? (
+        <div className="rounded-card border border-line bg-surface">
+          <button
+            type="button"
+            onClick={() => setShowSetup((v) => !v)}
+            aria-expanded={showSetup}
+            className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+          >
+            <span className="text-[13px] font-semibold text-ink">
+              What the DNS change involves
+            </span>
+            <span aria-hidden="true" className="shrink-0 text-[13px] text-ink-mute">
+              {showSetup ? 'Hide' : 'Show'}
+            </span>
+          </button>
+          {showSetup ? <DnsSetup company={company} /> : null}
+        </div>
+      ) : null}
+
       <p className="pt-1 text-[13px] text-ink-mute">
         Either way you are the sender and we act on your instruction. The second option is
         not us pretending to be you — it only works because you publish the key, which is
         the same thing every company's newsletter does.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The actual records, because "just update your DNS" is not an instruction.
+ *
+ * This is written for the person who will really do it — whoever built the firm's
+ * website, working from a forwarded email — not for the installer. Hence real record
+ * types, a named subdomain, and an explicit note that the main domain is untouched,
+ * which is the first thing any competent web person will want to know before they
+ * agree to it.
+ *
+ * Collapsed by default. On the founder demo this is a detail that proves the upgrade
+ * path is real; expanded by default it would be a wall of DNS in the middle of the
+ * story.
+ */
+function DnsSetup({ company }: { company: HubCompany }) {
+  const bare = company.selfServeLinkToken;
+  const subdomain = `lumo.${bare}renewables.co.uk`;
+
+  const records = [
+    {
+      type: 'CNAME',
+      host: `lumo.${bare}...co.uk`,
+      value: 'dkim.lumopartners.co.uk',
+      why: 'Lets us sign mail with a key you have authorised. This is the part that makes it authenticate as you.',
+    },
+    {
+      type: 'TXT',
+      host: `lumo.${bare}...co.uk`,
+      value: 'v=spf1 include:lumopartners.co.uk ~all',
+      why: 'Tells inbox providers that our servers are allowed to send for that subdomain.',
+    },
+  ];
+
+  return (
+    <div className="border-t border-line px-3 py-3">
+      <p className="text-[13px] leading-snug text-ink-soft">
+        Two records on <span className="font-semibold text-ink">{subdomain}</span> — a
+        subdomain we would use only for this. Your main domain is not touched, so your
+        normal email and your website carry on exactly as they are.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {records.map((record) => (
+          <li key={record.type} className="rounded-card bg-sunk px-3 py-2">
+            <p className="text-[12px] font-semibold text-ink-soft">{record.type}</p>
+            <p className="mt-0.5 break-all font-mono text-[12px] text-ink">{record.value}</p>
+            <p className="mt-1 text-[12px] leading-snug text-ink-mute">{record.why}</p>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-[13px] text-ink-mute">
+        We check them every few minutes and switch you over automatically once both are
+        live. Nothing changes for you in the meantime, and you can stay on Lumo's domain
+        indefinitely if you would rather not bother.
       </p>
     </div>
   );
