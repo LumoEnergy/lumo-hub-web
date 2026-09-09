@@ -361,6 +361,9 @@ function RewardCell({ row }: { row: CustomerRow }) {
     case 'lapsed':
       return <span className="text-ink-mute">Clock reset</span>;
     default:
-      return <Missing />;
+      // Not a missing field. The 30 days have not begun, either because the household
+      // has not signed up or because control is not running yet, and "not given" read
+      // as an absent value on a row where everything else was present.
+      return <span className="text-ink-mute">Not started</span>;
   }
 }

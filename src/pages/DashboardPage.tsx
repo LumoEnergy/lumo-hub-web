@@ -58,7 +58,12 @@ export function DashboardPage() {
           />
         )}
 
-        <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
+        {/*
+          `items-start` matters: the default stretches the funnel panel to the height of the
+          three stacked panels beside it, which left about 300px of empty card under the
+          drop-outs and read as a rendering fault rather than as breathing room.
+        */}
+        <div className="grid items-start gap-4 xl:grid-cols-[1.35fr_1fr]">
           <Panel
             title="Where your customers are"
             meta={

@@ -234,10 +234,20 @@ describe('the customers screen', () => {
 
   it('has no pinned money callout, because it shouted on every visit', () => {
     // "£100 of yours is going to nobody" was true and was the loudest thing on the
-    // screen even when you came to look at something else. It is four rows in Needs
-    // you with an instruction beside them now.
-    mount('mid-campaign', <CustomersPage />);
-    expect(bodyText()).not.toMatch(/going to nobody/i);
+    // screen even when you came to look at something else. It is rows in Needs you
+    // with an instruction beside them now.
+    for (const view of ['all', 'invited', 'waiting', 'active'] as const) {
+      cleanup();
+      mount('mid-campaign', <CustomersPage />, `/?view=${view}`);
+      expect(bodyText(), view).not.toMatch(/going to nobody/i);
+    }
+  });
+
+  it('states the unmatched total once, in the view that asks for the fix', () => {
+    // The one multiplied total the spec allows: those households are live, the 30 days
+    // are served, and the money exists. It belongs where someone has come to act on it.
+    mount('mid-campaign', <CustomersPage />, '/?view=attention');
+    expect(bodyText()).toMatch(/£\d+ of it is already earned and going to nobody/);
   });
 
   it('tells the firm what to do on the only view that asks anything of them', () => {
@@ -333,6 +343,12 @@ describe('the campaign screen', () => {
     expect(text).toMatch(/new-fits-jan-to-aug\.csv/);
     expect(text).toMatch(/Still processing/);
     expect(text).toMatch(/We will email Sean Docherty in a few hours/);
+
+    // One honest number, the count they handed over. The other three used to render
+    // as "not given", which put the same placeholder on screen three times and made a
+    // normal wait look like a data fault.
+    const record = screen.getByText(/new-fits-jan-to-aug\.csv/).closest('div')?.parentElement;
+    expect(record?.textContent).not.toMatch(/We loaded|Duplicates/);
   });
 
   it('takes another list either way', () => {

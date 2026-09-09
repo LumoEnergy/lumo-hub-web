@@ -6,6 +6,7 @@ import type { CustomerRow, SortDirection, SortKey } from '../selectors/customers
 import { VIEWS, isViewId, rowsForView, scheduledSendDates } from '../selectors/views';
 import type { ViewId } from '../selectors/views';
 import { displayName } from '../fixtures';
+import { REWARD_GBP } from '../state';
 import { CustomerCard, CustomerDetail } from '../components/CustomerRow';
 import { CustomerTable } from '../components/CustomerTable';
 import { Sheet } from '../components/Sheet';
@@ -25,8 +26,13 @@ import { Button, Card, EmptyState, ScreenTitle, SegmentedToggle } from '../compo
  * NO CALLOUTS. There was a pinned banner saying "£100 of yours is going to nobody",
  * which was true and was also the loudest thing on the screen on every single visit,
  * including the visits where you came to look at something else. Unmatched
- * households are now four rows in Needs you with an instruction next to them, which
- * is where a job belongs.
+ * households are now rows in Needs you with an instruction next to them, which is
+ * where a job belongs, and the total is one line of the blurb in that view only.
+ *
+ * The total survives at all because this is the one place a multiplied figure is
+ * honest: those households are live, the 30 days are served, and the money exists
+ * and is going to nobody. Everywhere else a count times £50 prices the work at 100%
+ * conversion, which is why it is on the forbidden list in the design spec.
  */
 
 /**
@@ -84,6 +90,12 @@ export function CustomersPage() {
 
   const definition = VIEWS.find((v) => v.id === view)!;
 
+  // Money already earned that no firm is being paid for. Real, so it can be summed.
+  const unmatchedGbp = useMemo(
+    () => rows.filter((r) => r.resolved.track === 'match').length * REWARD_GBP,
+    [rows],
+  );
+
   return (
     <>
       <ScreenTitle count={rows.length} sub={`Everyone ${company.name} handed over.`}>
@@ -97,7 +109,17 @@ export function CustomersPage() {
           onChange={setView}
           options={VIEWS.map((v) => ({ value: v.id, label: v.label, count: counts[v.id] }))}
         />
-        <p className="mt-2 text-[13px] text-ink-soft">{definition.blurb}</p>
+        <p className="mt-2 text-[13px] text-ink-soft">
+          {definition.blurb}
+          {view === 'attention' && unmatchedGbp > 0 ? (
+            <>
+              {' '}
+              <span className="font-semibold text-ink">
+                £{unmatchedGbp} of it is already earned and going to nobody.
+              </span>
+            </>
+          ) : null}
+        </p>
       </div>
 
       {sorted.length === 0 ? (

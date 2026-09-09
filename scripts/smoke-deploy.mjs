@@ -84,7 +84,11 @@ const PERSONAS = [
   {
     id: 'awaiting-approval',
     path: '',
-    expect: [/Demo: Awaiting approval/, /Nothing has been sent yet/, /only sign-off/],
+    expect: [
+      /Demo: Awaiting approval/,
+      /Nothing has been sent yet/,
+      /approve the email once/,
+    ],
     // Nothing has sent, so there is no money and there must be no guess at any.
     reject: [/Earned by/, /could earn/i, /projected/i],
   },
@@ -117,14 +121,15 @@ const ROUTES = [
   {
     id: 'customers-needs-you',
     path: 'customers?view=attention',
-    expect: [/What to do/, /Add an email address/],
+    expect: [/What to do/, /Add an email address/, /already earned and going to nobody/],
     reject: [/Whose/],
   },
   {
     id: 'customers-active',
     path: 'customers?view=active',
     expect: [/Inverter/, /Control/, /Live for/],
-    reject: [/state of charge/i],
+    // A reward clock that has not begun is "Not started", not a missing value.
+    reject: [/state of charge/i, /not given/],
   },
   {
     id: 'campaign',
@@ -205,7 +210,11 @@ const CHECKS = [
 ];
 
 for (const check of CHECKS) {
-  const url = `${origin}${base}${check.path}?p=${check.persona}`;
+  // A path may already carry a query, the customer views are addressed by one, so the
+  // persona joins with & rather than a second ?. Appending ? unconditionally produced
+  // `customers?view=attention?p=...`, which the router reads as a single view value of
+  // "attention?p=mid-campaign", falls back to All, and fails on the wrong screen.
+  const url = `${origin}${base}${check.path}${check.path.includes('?') ? '&' : '?'}p=${check.persona}`;
   const problems = [];
   let text = '';
 

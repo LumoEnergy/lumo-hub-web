@@ -65,11 +65,18 @@ function FileRow({ batch }: { batch: ImportBatch }) {
         {batch.source}
       </p>
 
+      {/* A file still being matched has one honest number, the count they handed over.
+          Rendering the other three as "not given" put the same placeholder on screen three
+          times and made a normal wait look like a data fault. */}
       <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Figure value={batch.rowsSupplied} label="You sent" />
-        <Figure value={batch.rowsLoaded} label="We loaded" tone="accent" />
-        <Figure value={batch.rowsHeld} label="Need you" tone="warn" />
-        <Figure value={batch.rowsRejected} label="Duplicates" />
+        {processing ? null : (
+          <>
+            <Figure value={batch.rowsLoaded} label="We loaded" tone="accent" />
+            <Figure value={batch.rowsHeld} label="Need you" tone="warn" />
+            <Figure value={batch.rowsRejected} label="Duplicates" />
+          </>
+        )}
       </div>
 
       {/* The unusable rows keep their number and lose their explanation. It said
