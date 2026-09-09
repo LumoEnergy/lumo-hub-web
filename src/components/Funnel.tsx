@@ -24,14 +24,28 @@ const FILL: Record<StageId, string> = {
   earning: 'bg-accent',
 };
 
+/**
+ * Below this share of the list, the count will not fit inside its own bar.
+ *
+ * A 14% floor width was the first attempt, and it was wrong in a way that mattered:
+ * opened, signed up and earning are 11%, 4.6% and 3.3% of Northfield's book, so all
+ * three were clamped to the same width and three different numbers drew three
+ * identical bars. The bottom half of the funnel is exactly where a founder is
+ * looking. Width is share of the list, literally, all the way down, and a bar too
+ * narrow to hold its own number puts the number outside itself instead.
+ */
+const LABEL_INSIDE = 0.16;
+
 export function Funnel({ journey }: { journey: Journey }) {
   return (
     <ol className="space-y-1.5">
       {journey.stages.map((stage) => {
-        // Zero gets no bar at all. The floor width keeps a small number readable,
-        // but applying it to an empty stage draws a green block next to "Earning 0",
-        // which is the one thing a funnel must never imply.
-        const width = stage.count === 0 ? 0 : Math.max(stage.ofList * 100, 14);
+        // Zero gets no bar at all. A minimum keeps a sliver visible rather than
+        // invisible, but applying one to an empty stage draws a green block next to
+        // "Earning 0", which is the one thing a funnel must never imply.
+        const empty = stage.count === 0;
+        const inside = stage.ofList >= LABEL_INSIDE;
+        const count = stage.count.toLocaleString('en-GB');
 
         return (
           <li key={stage.id} className="flex items-center gap-2 sm:gap-3">
@@ -39,20 +53,29 @@ export function Funnel({ journey }: { journey: Journey }) {
               {stage.label}
             </span>
 
-            <span className="flex flex-1 justify-center" title={stage.hint}>
-              {width === 0 ? (
+            <span className="flex flex-1 items-center justify-center" title={stage.hint}>
+              {empty ? (
                 <span className="tnum text-[13px] text-ink-mute">none yet</span>
               ) : (
+                // The count sits absolutely outside the bar rather than as a sibling
+                // in the flex row, because a sibling is centred along with the bar and
+                // drags it off the funnel's axis by half the label width.
                 <span
                   className={[
-                    'flex h-8 min-w-[3.75rem] items-center justify-center rounded-md',
+                    'relative flex h-8 items-center justify-center rounded-md',
                     'text-[14px] font-bold text-white tabular-nums',
                     'transition-[width] duration-500',
                     FILL[stage.id],
                   ].join(' ')}
-                  style={{ width: `${width}%` }}
+                  style={{ width: `${Math.max(stage.ofList * 100, 1.5)}%` }}
                 >
-                  {stage.count.toLocaleString('en-GB')}
+                  {inside ? (
+                    count
+                  ) : (
+                    <span className="tnum absolute left-full ml-2 font-bold text-ink">
+                      {count}
+                    </span>
+                  )}
                 </span>
               )}
             </span>

@@ -210,9 +210,12 @@ library in a disposable prototype.
   different questions, and conflating them is how funnels mislead, a bar drawn to the
   conversion rate makes a 9% bounce look like a cliff, and one drawn to share of list hides
   where the loss happened.
-- Bars have a 14% floor width, because "too small to read" is not the same information as
-  "small". **A stage at zero gets no bar at all**, and says "none yet": the floor applied to
-  an empty stage drew a green block beside "Earning 0".
+- **No floor width beyond a visible sliver, and the count moves outside the bar when it
+  will not fit.** A 14% floor was the first attempt and it clamped opened, signed up and
+  earning to the same width, because all three are under 12% of Northfield's book. Three
+  different numbers, three identical bars, in the half of the funnel a founder is reading.
+- **A stage at zero gets no bar at all** and says "none yet". The floor applied to an empty
+  stage drew a green block beside "Earning 0".
 - **No prose.** Each stage carried an explanatory sentence, which is five sentences of body
   text on a screen whose entire job is to be glanced at. A label, a count and a drop-off
   percentage is what a funnel is. The sentence survives as a `title` for anyone who hovers.
