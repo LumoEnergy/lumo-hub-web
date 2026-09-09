@@ -22,7 +22,10 @@ export function Funnel({ journey }: { journey: Journey }) {
   return (
     <ol className="space-y-2.5">
       {journey.stages.map((stage, i) => {
-        const width = Math.max(stage.ofList * 100, 6);
+        // Zero gets no bar at all. The floor width is there so a small number is
+        // still readable, but applying it to an empty stage draws a green bar next
+        // to "Earning 0" — which is the one thing a funnel must never imply.
+        const width = stage.count === 0 ? 0 : Math.max(stage.ofList * 100, 6);
         const last = i === journey.stages.length - 1;
         return (
           <li key={stage.id}>

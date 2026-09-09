@@ -112,7 +112,15 @@ export function journey(rows: readonly CustomerRow[]): Journey {
       count: delivered,
       ofPrevious: share(delivered, emailed),
       ofList: listSize === 0 ? 0 : delivered / listSize,
-      note: `${bounced} bounced. Normal on an older book, and each one is a recoverable £${REWARD_GBP}.`,
+      // The zero case is not a smaller version of the same sentence: "0 bounced,
+      // each one is a recoverable £50" is nonsense, and before a send it is the
+      // sentence every one of these stages would print.
+      note:
+        emailed === 0
+          ? 'Nothing has gone out yet, so there is nothing to report here.'
+          : bounced === 0
+            ? 'Nothing bounced, which is unusually clean for a back-book.'
+            : `${bounced} bounced. Normal on an older book, and each one is a recoverable £${REWARD_GBP}.`,
     },
     {
       id: 'opened',

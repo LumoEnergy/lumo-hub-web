@@ -76,6 +76,20 @@ describe('the dashboard', () => {
     expect(text).not.toMatch(/Earned by/);
   });
 
+  it('draws no bar and quotes no recoverable money for a stage at zero', () => {
+    // The floor bar width keeps a small number readable. Applied to an empty stage
+    // it drew a green bar beside "Earning 0", and the delivered note read "0
+    // bounced, each one is a recoverable £50".
+    mount('awaiting-approval', <DashboardPage />);
+    const panel = screen.getByRole('region', { name: 'Where your customers are' });
+    expect(panel.textContent).not.toMatch(/0 bounced/);
+    expect(panel.textContent).toMatch(/Nothing has gone out yet/);
+    const filled = panel.querySelectorAll('[style*="width"]');
+    const widths = [...filled].map((el) => (el as HTMLElement).style.width);
+    // Only "On your list" has anyone in it, so exactly one bar may have width.
+    expect(widths.filter((w) => w !== '0%')).toHaveLength(1);
+  });
+
   it('shows the schedule as a shape, not as dates, before sign-off', () => {
     // The dates are meaningless until approval starts the clock, and a date that
     // slips because someone took a day to read the email reads as a broken promise.
