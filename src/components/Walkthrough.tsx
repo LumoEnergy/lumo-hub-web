@@ -268,51 +268,62 @@ interface Spot {
  * the next time a panel moved, and it would be an image of fixture data presented as
  * an example of the product. A wireframe with a ring on it makes the same point,
  * survives a layout change, and cannot be mistaken for real customers.
+ *
+ * THE WIREFRAME MATCHES THE CHROME THE READER IS LOOKING AT. A sidebar on a laptop, a
+ * bottom tab bar on a phone, because that is what the shell does at each width.
+ * Hiding the sidebar on mobile and drawing nothing in its place, which is what the
+ * first cut did, loses the which-tab half of the point and quietly implies the upload
+ * is on whichever screen you happen to be on.
  */
 function MiniScreen({ spot }: { spot: Spot }) {
   const ring = 'ring-2 ring-accent ring-offset-2 ring-offset-surface';
+  const pill = (n: number) =>
+    [n === spot.nav ? `bg-accent ${ring}` : 'bg-line', 'rounded-[3px]'].join(' ');
 
   return (
     <figure>
-      <div className="flex gap-2 rounded-card border border-line bg-sunk p-2.5">
-        {/* Sidebar. */}
-        <div className="hidden w-[52px] shrink-0 space-y-1.5 rounded-[6px] bg-surface p-1.5 sm:block">
-          <div className="h-2 w-8 rounded-full bg-line-strong" />
-          <div className="h-1.5 w-6 rounded-full bg-line" />
-          <div className="pt-1.5" />
-          {[0, 1, 2].map((n) => (
-            <div
-              key={n}
-              className={[
-                'h-2.5 rounded-[3px]',
-                n === spot.nav ? `bg-accent ${ring}` : 'bg-line',
-              ].join(' ')}
-            />
-          ))}
-        </div>
-
-        {/* Content. */}
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="h-3 w-24 rounded-full bg-line-strong" />
-          <div className="grid grid-cols-2 gap-2">
-            {[0, 1].map((n) => (
-              <div
-                key={n}
-                className={[
-                  'space-y-1.5 rounded-[6px] border border-line bg-surface p-2',
-                  n === spot.block ? ring : '',
-                ].join(' ')}
-              >
-                <div className="h-1.5 w-10 rounded-full bg-line-strong" />
-                <div className="h-1.5 w-full rounded-full bg-line" />
-                <div className="h-1.5 w-2/3 rounded-full bg-line" />
-              </div>
+      <div className="rounded-card border border-line bg-sunk p-2.5">
+        <div className="flex gap-2">
+          {/* Sidebar, laptop only. */}
+          <div className="hidden w-[52px] shrink-0 space-y-1.5 self-start rounded-[6px] bg-surface p-1.5 sm:block">
+            <div className="h-2 w-8 rounded-full bg-line-strong" />
+            <div className="h-1.5 w-6 rounded-full bg-line" />
+            <div className="pt-1.5" />
+            {[0, 1, 2].map((n) => (
+              <div key={n} className={`h-2.5 ${pill(n)}`} />
             ))}
           </div>
-          <div className="space-y-1.5 rounded-[6px] border border-line bg-surface p-2">
-            <div className="h-1.5 w-full rounded-full bg-line" />
-            <div className="h-1.5 w-5/6 rounded-full bg-line" />
+
+          {/* Content. */}
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-3 w-24 rounded-full bg-line-strong" />
+            <div className="grid grid-cols-2 gap-2">
+              {[0, 1].map((n) => (
+                <div
+                  key={n}
+                  className={[
+                    'space-y-1.5 rounded-[6px] border border-line bg-surface p-2',
+                    n === spot.block ? ring : '',
+                  ].join(' ')}
+                >
+                  <div className="h-1.5 w-10 rounded-full bg-line-strong" />
+                  <div className="h-1.5 w-full rounded-full bg-line" />
+                  <div className="h-1.5 w-2/3 rounded-full bg-line" />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-1.5 rounded-[6px] border border-line bg-surface p-2">
+              <div className="h-1.5 w-full rounded-full bg-line" />
+              <div className="h-1.5 w-5/6 rounded-full bg-line" />
+            </div>
           </div>
+        </div>
+
+        {/* Bottom tab bar, phone only. */}
+        <div className="mt-2 flex gap-2 rounded-[6px] bg-surface p-1.5 sm:hidden">
+          {[0, 1, 2].map((n) => (
+            <div key={n} className={`h-2.5 flex-1 ${pill(n)}`} />
+          ))}
         </div>
       </div>
       <figcaption className="mt-2 text-[12px] font-semibold text-accent">

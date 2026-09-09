@@ -156,6 +156,14 @@ const ROUTES = [
   {
     // The only check that lets the guide open. Everything else suppresses it so the
     // screen underneath is what gets tested rather than an overlay covering it.
+    //
+    // Step one only. This renders a page and reads it, it does not click, so the
+    // later steps are not in the DOM. What it is proving is that the guide opens on a
+    // fresh load at all, which is the part that cannot be tested in jsdom because it
+    // depends on a real page load. The step content and the money wording are
+    // asserted in `src/__tests__/App.test.tsx`, where the assertion can be scoped to
+    // the dialog: page-wide here, a reject on large money figures catches the
+    // dashboard's real earned total sitting behind the overlay.
     id: 'first-open guide',
     path: '',
     guide: true,
@@ -164,12 +172,9 @@ const ROUTES = [
       /Welcome to Lumo/,
       /Northfield Renewables earns/,
       /£50 per household/,
-      /partners@lumoenergy\.co\.uk/,
+      /stays connected for 30 days/,
     ],
-    // Adding a customer earns nothing on its own, so no figure above the unit rate
-    // belongs here, and the guide must not promise energy data the build has no
-    // route to.
-    reject: [/£\s?\d{3,}/, /savings/i, /state of charge/i],
+    reject: [/savings/i, /state of charge/i],
   },
 ];
 
