@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+/**
+ * Hub tokens. The single source of colour, type and radius for this app.
+ *
+ * Defined by docs/visual-design-spec.md (fidelity: rethink). Deliberately prefixed
+ * --hub-* rather than reusing the --lumo-* names from lumo-app-web/src/brand.css:
+ * those are a dark palette, and rebinding a name that means "near-black background"
+ * to white is how a shared token set becomes a trap.
+ */
+:root {
+  /* Warmed off neutral grey. The first build was correct and cold, and cold reads
+     as unfinished. These are barely-there hue shifts, not decoration. */
+  --hub-page: #f7f7f5;
+  --hub-surface: #ffffff;
+  --hub-surface-sunk: #f1f1ee;
+  --hub-line: #e5e5e0;
+  --hub-line-strong: #cfd0c9;
+
+  --hub-text: #12140f;
+  --hub-text-soft: #5c625b;
+  --hub-text-mute: #888e86;
+
+  /* #7DE370 is a dark-UI green and fails contrast for text on white at any size.
+     --hub-accent is a darkened sibling of the same hue for anything containing a
+     glyph; --hub-accent-bright is the brand green, retained for fills only. */
+  --hub-accent: #12703a;
+  --hub-accent-soft: #e8f7ea;
+  --hub-accent-bright: #7de370;
+
+  /* Age drives colour, owner drives grouping: one dimension per channel. Green is
+     reserved for money and earning, and never appears on a blocker. */
+  --hub-age-ageing-fg: #b4690e;
+  --hub-age-ageing-bg: #fdf3e3;
+  --hub-age-stale-fg: #9a4b0c;
+  --hub-age-stale-bg: #fcebdd;
+  --hub-age-dead-fg: #b3261e;
+  --hub-age-dead-bg: #fdecea;
+
+  /**
+   * THE JOURNEY PALETTE. Slate to blue to teal to green, in that order, because the
+   * campaign runs in that order.
+   *
+   * The first build was greys plus one green plus a warning amber, which was
+   * defensible and looked like a spreadsheet. Colour here is not decoration: the
+   * status column and the funnel are the same five stages, so giving a stage one
+   * colour in both means a glance at either recognises the other.
+   *
+   * Teal sits between blue and green on purpose. A click is progress towards money
+   * but is not money, and green stays reserved for money, so the bridge hue does the
+   * work without breaking that rule.
+   */
+  --hub-wait-fg: #55605e;
+  --hub-wait-bg: #eceeec;
+  --hub-sent-fg: #1c5488;
+  --hub-sent-bg: #e8f1f9;
+  --hub-open-fg: #135d84;
+  --hub-open-bg: #e4f1f7;
+  --hub-click-fg: #0c6560;
+  --hub-click-bg: #e1f2f0;
+  --hub-warn-fg: #92550c;
+  --hub-warn-bg: #fdf3e1;
+}
+
+@theme inline {
+  --color-page: var(--hub-page);
+  --color-surface: var(--hub-surface);
+  --color-sunk: var(--hub-surface-sunk);
+  --color-line: var(--hub-line);
+  --color-line-strong: var(--hub-line-strong);
+
+  --color-ink: var(--hub-text);
+  --color-ink-soft: var(--hub-text-soft);
+  --color-ink-mute: var(--hub-text-mute);
+
+  --color-accent: var(--hub-accent);
+  --color-accent-soft: var(--hub-accent-soft);
+  --color-accent-bright: var(--hub-accent-bright);
+
+  --color-ageing-fg: var(--hub-age-ageing-fg);
+  --color-ageing-bg: var(--hub-age-ageing-bg);
+  --color-stale-fg: var(--hub-age-stale-fg);
+  --color-stale-bg: var(--hub-age-stale-bg);
+  --color-dead-fg: var(--hub-age-dead-fg);
+  --color-dead-bg: var(--hub-age-dead-bg);
+
+  --color-wait-fg: var(--hub-wait-fg);
+  --color-wait-bg: var(--hub-wait-bg);
+  --color-sent-fg: var(--hub-sent-fg);
+  --color-sent-bg: var(--hub-sent-bg);
+  --color-open-fg: var(--hub-open-fg);
+  --color-open-bg: var(--hub-open-bg);
+  --color-click-fg: var(--hub-click-fg);
+  --color-click-bg: var(--hub-click-bg);
+  --color-warn-fg: var(--hub-warn-fg);
+  --color-warn-bg: var(--hub-warn-bg);
+
+  --font-sans: Figtree, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Radii top out at 16px. The consumer app's 28-32px cards fit two rows on a
+     phone; this screen needs twelve. */
+  --radius-chip: 8px;
+  --radius-card: 12px;
+  --radius-sheet: 16px;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--hub-page);
+    color: var(--hub-text);
+    font-family: Figtree, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Tailwind v4 preflight does not restore the pointer affordance on buttons. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  /* Figures that are compared to each other must line up. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--hub-accent);
+    outline-offset: 2px;
+  }
+}
+
+@keyframes hub-sheet-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes hub-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.hub-sheet-in {
+  animation: hub-sheet-in 180ms ease-out;
+}
+
+.hub-fade-in {
+  animation: hub-fade-in 150ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-sheet-in,
+  .hub-fade-in {
+    animation: none;
+  }
+}

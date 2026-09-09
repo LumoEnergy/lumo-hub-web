@@ -1,0 +1,39 @@
+{
+  "hosting": [
+    {
+      "target": "hub-demo-dev",
+      "public": "dist",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "_comment_base": "The /d/... prefix must match DEMO_BASE in src/demoBase.ts. JSON cannot import it, so scripts/verify-build.mjs asserts the two agree and npm run build fails if they drift. Scoping the rewrite to the base path also means Firebase 404s the site root rather than serving a bundle that then declines to render.",
+      "_comment_headers": "Header `source` globs match the REQUEST path, not the rewritten one. A rule on **/index.html never fires, because every screen is requested as /d/<base>/... and only rewritten to index.html afterwards. So no-cache is the default and only hashed assets opt into a long cache, otherwise the SPA entry is cached for an hour and a redeploy mid-research-session is invisible.",
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive, nosnippet" },
+            { "key": "X-Frame-Options", "value": "DENY" },
+            { "key": "X-Content-Type-Options", "value": "nosniff" },
+            { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+            { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
+            { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains" },
+            {
+              "key": "Content-Security-Policy",
+              "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+            },
+            { "key": "Cache-Control", "value": "no-cache" }
+          ]
+        },
+        {
+          "source": "**/assets/**",
+          "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+        }
+      ],
+      "rewrites": [
+        {
+          "source": "/d/3FgvdyiYBsD9/**",
+          "destination": "/d/3FgvdyiYBsD9/index.html"
+        }
+      ]
+    }
+  ]
+}
