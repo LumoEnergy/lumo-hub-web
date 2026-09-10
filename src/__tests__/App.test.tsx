@@ -32,15 +32,73 @@ describe('App at the base path', () => {
     // DOM and CSS chooses. The named landmarks are what stop that being a mess for
     // anyone not looking at the CSS.
     expect(screen.getAllByRole('link', { name: /Dashboard/ })).toHaveLength(2);
-    expect(screen.getAllByRole('link', { name: /Customers/ })).toHaveLength(2);
-    expect(screen.getAllByRole('link', { name: /Campaign/ })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: /Sign-ups/ })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: /Campaign setup/ })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: /Monitoring/ })).toHaveLength(2);
     expect(screen.getByRole('navigation', { name: 'Sections' })).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Sections, bottom bar' })).toBeTruthy();
+  });
+
+  it('has no Customers tab, because it was two jobs under one noun', () => {
+    render(<App />);
+    expect(screen.queryAllByRole('link', { name: /^Customers$/ })).toHaveLength(0);
+  });
+
+  it('names the bottom tabs in full for a screen reader, even when shortened on screen', () => {
+    // The tab bar shows "Setup" because four tabs share the width of a phone. A screen
+    // reader announcing "Setup" has lost exactly what the icon carries visually, so the
+    // accessible name stays the long one.
+    render(<App />);
+    const bottom = screen.getByRole('navigation', { name: 'Sections, bottom bar' });
+    expect(within(bottom).getByRole('link', { name: 'Campaign setup' })).toBeTruthy();
   });
 
   it('has no earnings tab, because it listed the same households twice', () => {
     render(<App />);
     expect(screen.queryAllByRole('link', { name: /Earnings/ })).toHaveLength(0);
+  });
+
+  describe('retired URLs', () => {
+    // Old links live in slide decks, browser histories and colleagues' messages. A 404 on
+    // one of them during a demo costs more than these five lines.
+    const land = (from: string) => {
+      window.history.replaceState({}, '', `${DEMO_BASE}${from}`);
+      render(<App />);
+      const heading = screen.getAllByRole('heading')[0].textContent ?? '';
+      window.history.replaceState({}, '', DEMO_BASE);
+      return heading;
+    };
+
+    it('sends /customers to Sign-ups', () => {
+      expect(land('customers?guide=off')).toMatch(/Sign-ups/);
+    });
+
+    it('sends the retired active view to Monitoring, not to Sign-ups', () => {
+      // This is the whole point of the split: the one view that was an operations
+      // question goes to the operations screen.
+      expect(land('customers?view=active&guide=off')).toMatch(/Monitoring/);
+    });
+
+    it('keeps a campaign view on the way through', () => {
+      window.history.replaceState({}, '', `${DEMO_BASE}customers?view=attention&guide=off`);
+      render(<App />);
+      const pressed = screen
+        .getAllByRole('button', { pressed: true })
+        .map((b) => b.textContent?.replace(/\d+$/, '').trim());
+      expect(pressed).toEqual(['Needs you']);
+      window.history.replaceState({}, '', DEMO_BASE);
+    });
+
+    it('keeps the persona through the hop, so the demo does not silently reset', () => {
+      window.history.replaceState({}, '', `${DEMO_BASE}customers?p=messy-list&guide=off`);
+      render(<App />);
+      expect(screen.getAllByText(/Fenwick Solar/).length).toBeGreaterThan(0);
+      window.history.replaceState({}, '', DEMO_BASE);
+    });
+
+    it('sends the retired earnings screen to Monitoring', () => {
+      expect(land('earnings?guide=off')).toMatch(/Monitoring/);
+    });
   });
 
   it('identifies the account by company, not by the person logged in', () => {
@@ -84,8 +142,8 @@ describe('the first-open guide', () => {
     expect(screen.queryByRole('dialog', { name: 'Getting started' })).toBeNull();
 
     // Two of each nav link exist, sidebar and bottom bar. Either is a real navigation.
-    fireEvent.click(screen.getAllByRole('link', { name: /Customers/ })[0]);
-    expect(screen.getByRole('heading', { name: /Customers/ })).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('link', { name: /Sign-ups/ })[0]);
+    expect(screen.getByRole('heading', { name: /Sign-ups/ })).toBeTruthy();
     expect(screen.queryByRole('dialog', { name: 'Getting started' })).toBeNull();
 
     fireEvent.click(screen.getAllByRole('link', { name: /Dashboard/ })[0]);
@@ -107,7 +165,7 @@ describe('the first-open guide', () => {
       'Send us your customer list',
       'We load it and check with you',
       'Watch it land',
-      'Then it keeps working',
+      'Then you can watch it work',
     ]);
     expect(dots()[4].getAttribute('aria-selected')).toBe('true');
   });
@@ -146,14 +204,15 @@ describe('the first-open guide', () => {
     expect(text).not.toMatch(/£\s?\d{3,}|£\s?\d+,\d{3}/);
   });
 
-  it('promises only what the demo can show, and no energy data', () => {
+  it('promises only what the demo can show, and no money it cannot back', () => {
     render(<App />);
     for (let n = 0; n < 4; n += 1) next();
     const text = within(guide()).getByRole('heading').parentElement?.textContent ?? '';
-    expect(text).toMatch(/Then it keeps working/);
-    expect(guide().textContent).not.toMatch(
-      /savings|state of charge|kWh generated|performance report/i,
-    );
+    expect(text).toMatch(/Then you can watch it work/);
+    // Charts are now real on Monitoring, so promising them is honest. Money the demo
+    // cannot back is still forbidden: a savings figure belongs to the household's bill,
+    // not to the installer, and a performance report does not exist at all.
+    expect(guide().textContent).not.toMatch(/savings|performance report|you could earn/i);
   });
 
   it('stays shut when the guide is switched off in the URL', () => {

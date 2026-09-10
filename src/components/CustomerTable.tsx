@@ -1,14 +1,14 @@
 import type { ReactNode } from 'react';
 import type { CustomerRow, SortDirection, SortKey } from '../selectors/customers';
 import { moneyPosition } from '../selectors/customers';
-import { actionFor, controlStatus, statusClass, statusFor } from '../selectors/status';
+import { actionFor, statusClass, statusFor } from '../selectors/status';
 import type { ViewId } from '../selectors/views';
 import { displayName } from '../fixtures';
 import { REWARD_GBP } from '../state';
-import { AgeChip, Missing } from './ui';
+import { AgeChip } from './ui';
 
 /**
- * The customer list, as one table with five column sets.
+ * The campaign list, as one table with three column sets.
  *
  * This is the reason the product is desktop-first. A firm with several hundred
  * households wants to sort by what is oldest, find the ones that are earning, and
@@ -17,9 +17,13 @@ import { AgeChip, Missing } from './ui';
  *
  * COLUMNS FOLLOW THE VIEW, they are not a fixed set that gets filtered. Each tab
  * asks a different question, so each gets the columns that answer it: a scheduled
- * send date only means something on Not yet contacted, and battery kit only means
- * something on Active. One shared column set covering all five left most rows with
- * half their cells empty.
+ * send date only means something on Not yet contacted. One shared column set covering
+ * every view left most rows with half their cells empty.
+ *
+ * THE KIT COLUMNS LEFT WITH THE ACTIVE VIEW. Battery, inverter and control health now
+ * live on `SiteTable`, because they answer an operations question rather than a
+ * campaign one. `HOUSEHOLD` and `REWARD` are shared between the two tables and
+ * exported for that reason.
  *
  * NOTHING IS EVER HIDDEN AT NARROW WIDTHS. The first version dropped the age column
  * below 1280px, which took the heading with it and made the table look broken rather
@@ -41,7 +45,7 @@ export interface TableContext {
   readonly scheduled: ReadonlyMap<string, string>;
 }
 
-interface Column {
+export interface Column {
   readonly id: string;
   readonly label: string;
   /** Omitted for columns with no meaningful order, e.g. free-text advice. */
@@ -51,7 +55,7 @@ interface Column {
   readonly cell: (row: CustomerRow, context: TableContext) => ReactNode;
 }
 
-const HOUSEHOLD: Column = {
+export const HOUSEHOLD: Column = {
   id: 'household',
   label: 'Household',
   sort: 'household',
@@ -87,7 +91,7 @@ const WAITING: Column = {
   ),
 };
 
-const REWARD: Column = {
+export const REWARD: Column = {
   id: 'money',
   label: 'Reward',
   sort: 'money',
@@ -140,51 +144,9 @@ const COLUMNS: Record<ViewId, readonly Column[]> = {
       cell: (row) => <span className="text-ink">{actionFor(row)}</span>,
     },
   ],
-
-  // Ops-console density, because this is the only view where the kit matters. An
-  // installer looking at a live household is asking an engineering question.
-  active: [
-    HOUSEHOLD,
-    {
-      id: 'battery',
-      label: 'Battery',
-      width: 'min-w-[6rem]',
-      cell: (row) =>
-        row.customer.batterySizeKwh === null ? (
-          <Missing />
-        ) : (
-          <span className="tnum text-ink-soft">{row.customer.batterySizeKwh} kWh</span>
-        ),
-    },
-    {
-      id: 'inverter',
-      label: 'Inverter',
-      width: 'min-w-[7rem]',
-      cell: (row) =>
-        row.customer.inverterMake ? (
-          <span className="text-ink-soft">{row.customer.inverterMake}</span>
-        ) : (
-          <Missing />
-        ),
-    },
-    {
-      id: 'control',
-      label: 'Control',
-      width: 'min-w-[12rem]',
-      cell: (row) => <StatusChip status={controlStatus(row)} />,
-    },
-    {
-      id: 'live',
-      label: 'Live for',
-      sort: 'age',
-      width: 'min-w-[7rem]',
-      cell: (row) => <span className="tnum text-ink-soft">{row.resolved.ageDays}d</span>,
-    },
-    REWARD,
-  ],
 };
 
-function StatusChip({
+export function StatusChip({
   status,
 }: {
   status: { label: string; tone: Parameters<typeof statusClass>[0] };
@@ -223,16 +185,55 @@ export function CustomerTable({
   onSort: (key: SortKey) => void;
   onOpen: (row: CustomerRow) => void;
 }) {
-  const columns = COLUMNS[view];
+  return (
+    <DataTable
+      rows={rows}
+      columns={COLUMNS[view]}
+      context={context}
+      sort={sort}
+      direction={direction}
+      onSort={onSort}
+      onOpen={onOpen}
+      caption={
+        view === 'attention'
+          ? 'Households needing something only your firm can supply, and what to do about each.'
+          : 'Your customers, in campaign order, with where each one has got to.'
+      }
+    />
+  );
+}
 
+/**
+ * The table shell, shared by the campaign list and the live site list.
+ *
+ * Extracted rather than copied. The sticky first column, the horizontal scroll and the
+ * `aria-sort` handling are the fiddly part, and two copies of them drift: the second
+ * one gets the pinned-column background wrong and rows slide illegibly under the name
+ * at narrow widths, which is exactly the bug the original comment below warns about.
+ */
+export function DataTable({
+  rows,
+  columns,
+  context,
+  sort,
+  direction,
+  onSort,
+  onOpen,
+  caption,
+}: {
+  rows: readonly CustomerRow[];
+  columns: readonly Column[];
+  context: TableContext;
+  sort: SortKey;
+  direction: SortDirection;
+  onSort: (key: SortKey) => void;
+  onOpen: (row: CustomerRow) => void;
+  caption: string;
+}) {
   return (
     <div className="overflow-x-auto rounded-card border border-line bg-surface">
       <table className="w-full border-collapse text-left">
-        <caption className="sr-only">
-          {view === 'attention'
-            ? 'Households needing something only your firm can supply, and what to do about each.'
-            : 'Your customers, in campaign order, with where each one has got to.'}
-        </caption>
+        <caption className="sr-only">{caption}</caption>
         <thead>
           <tr className="border-b border-line-strong bg-sunk">
             {columns.map((column, i) => {

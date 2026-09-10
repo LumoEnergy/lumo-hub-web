@@ -36,4 +36,9 @@ export default defineConfig({
   },
   plugins: [react(), tailwindcss(), siteRootFiles()],
   server: { port: 8090 },
+  test: {
+    // Only the jsdom suites need it, and the file is a no-op elsewhere. See the comment
+    // in setup.ts for why a canvas stub is worth having at all.
+    setupFiles: ['./src/__tests__/setup.ts'],
+  },
 })

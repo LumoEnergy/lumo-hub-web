@@ -404,17 +404,46 @@ be a disposable shell around two durable modules.
 - `Button` (primary, secondary, quiet), `Field`, `PasteGrid`, `CopyBlock`.
 - `EmptyState`, `ResetPill`.
 
-### Live customers, without inventing energy data
+### Monitoring is a separate screen from the campaign
 
-Active households need to look monitored, or the product reads as a lead generator that
-stops caring the moment someone signs up. But this build has no route to energy data and
-must not draw a chart of it (see the forbidden list). `FleetStrip` is what is left when you
-take that seriously: **three facts that are true of the fixtures**, control running versus
-not, how far through the 30-day reward clock the cohort is, and the inverter mix. No
-kilowatt-hours, no state of charge, no savings.
+`Customers` used to carry both, as a tab called `Active`, and that was a category error.
+Converting a back book is a sales funnel: read weekly, driven by email events, the question
+is "is this working". Watching live batteries is an operations job: read when a customer
+rings up, driven by telemetry, the question is "is this one broken". Same households,
+different reader, different cadence, different data. One table trying to serve both meant
+every column set was half empty, so the nav is now four: `Dashboard`, `Sign-ups`,
+`Campaign setup`, `Monitoring`.
 
-The bet is that a firm reading "36 of 38 optimising" believes Lumo is watching, and would
-not believe a fabricated energy chart for long.
+`FleetStrip` moved with it, from the dashboard to the top of `Monitoring`, and still does
+the same job at the roll-up level: control running versus not, progress through the 30-day
+reward clock, inverter mix. **There is no fleet-wide energy figure and should not be.** A
+summed kWh across a fleet is not a number anyone makes a decision with, and summing
+generated data would be the first genuinely misleading figure in the build.
+
+### The site detail, and what makes it convincing
+
+One live site gets a URL and a full page: a kit card, then three charts.
+
+The charts are the ops console's telemetry card, minus the interaction and minus the money.
+Solar against demand; battery charge, discharge and state of charge; grid import, export and
+the unit rate. Series names, units and sign conventions match the ops console so the two
+tools cannot disagree about what a chart means, but the colours are Hub tokens, because this
+is installer-facing and the ops console palette is an internal one.
+
+**The shaded bands are the most persuasive element on the screen**, and everything else is
+supporting. They mark the half-hours where Lumo was actively driving the battery. Without
+them the charts show a household using electricity, which is mildly interesting; with them
+they show a service running, charging at the cheap overnight rate and covering the evening
+peak. That is the whole product argument in one visual.
+
+Which makes the corollary non-negotiable: **a site whose control is not running shows no
+bands.** Drawing Lumo driving a battery Lumo cannot reach would be the one flatly dishonest
+thing on this screen. It is also the better demo, because opening the broken site and finding
+the shading gone is the moment the reader believes the shading on the working ones.
+
+Half-hourly is capped at a week because Firestore retains seven days at that resolution, and
+the screen says so rather than leaving it to be asked on a sales call. **Everything is
+labelled as generated**, in a line under the charts, in plain words.
 
 **Explicitly forbidden:**
 
@@ -425,9 +454,17 @@ not believe a fabricated energy chart for long.
   framed as content to paste into a channel they already own, not as a way to add someone.
 - A map. The live Hub has one; it is decoration that consumed a geocoder and a personal-data
   path for no decision an installer makes.
-- Any chart, any energy time series, any state-of-charge or savings figure. Hub has no route
-  to energy data and this build has no backend at all. Showing any of it, even as fixture
-  data, would set an expectation the real build cannot meet on the timeline being tested.
+- ~~Any chart, any energy time series, any state-of-charge or savings figure.~~ **Reversed,
+  and half of the original reasoning was wrong.** The claim was that Hub had no route to
+  energy data. It does: `webapp_site_data/{siteId}` holds half-hourly rows per site, and the
+  household's own app already draws charts from them, so the pipeline was never the blocker.
+  What is genuinely missing is permission, not plumbing, and that is now
+  `installer_site_visibility` in the producer gap register rather than a design prohibition.
+  **The savings figure stays forbidden**, for a reason that survives: the installer is owed a
+  fixed reward per household, so the household's bill is not theirs to quote, and the ops
+  console's cost and savings charts are the one part of its telemetry card this build does not
+  copy. Charts of energy, battery and grid flow are in, on `Monitoring` only, clearly labelled
+  as generated.
 - Any revenue projection or "you could earn" estimate, on any screen, in any persona.
 - Any control that asks the firm to record something they did outside the product.
 - **A count multiplied by £50, where the money depends on those households converting.**

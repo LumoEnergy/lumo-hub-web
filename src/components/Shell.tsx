@@ -21,17 +21,28 @@ import { Walkthrough } from './Walkthrough';
  */
 
 /**
- * Three destinations, and the order is the argument.
+ * Four destinations, and the order is the argument.
  *
- * Dashboard answers "is this working", Customers answers "who and how much", and
- * Campaign answers "what goes out, when, from whom". A fourth tab for earnings used
- * to sit in the middle listing the same households as Customers, which made the
- * reader hold two lists in their head; money is a column and a headline now.
+ * Dashboard answers "is this working", Sign-ups answers "who did the campaign reach",
+ * Campaign setup answers "what goes out, when, from whom", and Monitoring answers "are
+ * the live systems working".
+ *
+ * SIGN-UPS AND MONITORING ARE DELIBERATELY SEPARATE, and they used to be one screen
+ * called Customers with a tab called Active. That was a category error: converting a
+ * back book is a sales funnel, read once a week, driven by email events; watching live
+ * batteries is an operations job, read whenever something looks wrong, driven by
+ * telemetry. Same households, different question, different reader, different data.
+ * Filing them under one noun meant every column set was half empty.
+ *
+ * `shortLabel` exists because four tabs share the width of a phone. "Campaign setup"
+ * at 11px does not fit a quarter of 390px, and a label that truncates to "Campaign
+ * set..." is worse than a shorter word chosen on purpose.
  */
 const NAV = [
-  { to: '', label: 'Dashboard', end: true, icon: ChartIcon },
-  { to: 'customers', label: 'Customers', end: false, icon: ListIcon },
-  { to: 'campaign', label: 'Campaign', end: false, icon: InboxIcon },
+  { to: '', label: 'Dashboard', shortLabel: 'Dashboard', end: true, icon: ChartIcon },
+  { to: 'signups', label: 'Sign-ups', shortLabel: 'Sign-ups', end: false, icon: ListIcon },
+  { to: 'campaign', label: 'Campaign setup', shortLabel: 'Setup', end: false, icon: InboxIcon },
+  { to: 'monitoring', label: 'Monitoring', shortLabel: 'Monitoring', end: false, icon: PulseIcon },
 ] as const;
 
 export function Shell() {
@@ -153,7 +164,7 @@ export function Shell() {
         className="fixed bottom-0 z-30 w-full border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
         <ul className="flex h-[56px]">
-          {NAV.map(({ to, label, end, icon: Icon }) => (
+          {NAV.map(({ to, label, shortLabel, end, icon: Icon }) => (
             <li key={label} className="flex-1">
               <NavLink
                 to={to}
@@ -166,7 +177,10 @@ export function Shell() {
                 }
               >
                 <Icon />
-                {label}
+                {/* The accessible name stays the full label. A screen reader reading
+                    "Setup" has lost the same information the icon carries visually. */}
+                <span aria-hidden="true">{shortLabel}</span>
+                <span className="sr-only">{label}</span>
               </NavLink>
             </li>
           ))}
@@ -231,8 +245,23 @@ function ResetControl({
   );
 }
 
-/* Line icons, inherit colour. Inline because there are four of them and a
+/* Line icons, inherit colour. Inline because there are five of them and a
    dependency would be heavier than the markup. */
+
+/** Monitoring. A trace, because what this screen shows is a live signal. */
+function PulseIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path
+        d="M2.5 11h3l2-5 2.75 8L13 8.5l1.25 2.5h3.25"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 function GearIcon() {
   return (
