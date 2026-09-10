@@ -70,7 +70,12 @@ export function siteFacts(customer: HubCustomer, controlOn: boolean): HubSiteFac
     // A capacity that came off the installer's list rather than off the device is an
     // estimate, and saying so is the point of the field.
     batterySource: battery === null ? 'manual' : h % 5 === 0 ? 'estimate' : 'enode',
-    solarAnnualGenerationKwh: battery === null ? null : Math.round((battery / 10) * 3800),
+    // Derived from the same array-size curve the telemetry generator uses, so the yearly
+    // estimate on this card and the daily shape on the charts cannot contradict each
+    // other. A card claiming 1,976 kWh a year above a chart showing 50 kWh a week is the
+    // kind of mismatch that gets spotted in the room.
+    solarAnnualGenerationKwh:
+      battery === null ? null : Math.round((0.75 + (battery / 10) * 0.45) * 3400),
     importSupplier: tariff.supplier,
     importTariffName: tariff.name,
     exportSupplier: hasExport ? EXPORT_SUPPLIERS[(h >> 5) % EXPORT_SUPPLIERS.length] : null,

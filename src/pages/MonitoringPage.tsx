@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useDemoStore } from '../store/DemoStore';
 import { buildRows, sortRows } from '../selectors/customers';
 import type { CustomerRow, SortDirection, SortKey } from '../selectors/customers';
@@ -100,9 +100,8 @@ export function MonitoringPage() {
             <ul>
               {sorted.map((row) => (
                 <li key={row.customer.id}>
-                  <button
-                    type="button"
-                    onClick={() => open(row)}
+                  <Link
+                    to={`/monitoring/${row.customer.id}`}
                     className="flex w-full items-center justify-between gap-3 border-b border-line px-4 py-3 text-left last:border-0"
                   >
                     <span className="min-w-0">
@@ -116,7 +115,7 @@ export function MonitoringPage() {
                     <span className="shrink-0 text-ink-mute" aria-hidden="true">
                       &rsaquo;
                     </span>
-                  </button>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -135,7 +134,27 @@ export function MonitoringPage() {
  * columns of trivia to find the one fact that decides whether they pick up the phone.
  */
 const SITE_COLUMNS: readonly Column[] = [
-  HOUSEHOLD,
+  /**
+   * The name is a real link, not just a clickable row.
+   *
+   * The campaign table's rows open a side sheet, so a click handler is the whole story
+   * there. These rows go to a URL, and a row that navigates without an `<a>` cannot be
+   * tabbed to, copied, opened in a new tab or read as a link by a screen reader. The row
+   * handler stays for the rest of the row, and this stops propagation so a click on the
+   * name does not also fire it and push the same path onto history twice.
+   */
+  {
+    ...HOUSEHOLD,
+    cell: (row, context) => (
+      <Link
+        to={`/monitoring/${row.customer.id}`}
+        onClick={(event) => event.stopPropagation()}
+        className="hover:underline"
+      >
+        {HOUSEHOLD.cell(row, context)}
+      </Link>
+    ),
+  },
   {
     id: 'control',
     label: 'Control',

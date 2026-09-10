@@ -187,9 +187,27 @@ function day(
   const s = seed(`${siteId}:${dayIndex}`);
   const cloud = s;
   const appetite = 0.75 + s * 0.6;
-  // Roughly a 4 kWp array on a 10 kWh battery, scaled with it. Half-hour peak output.
-  const peakSolar = (batteryKwh / 10) * 1.1;
-  const baseLoad = 0.55 + (batteryKwh / 10) * 0.15;
+
+  /*
+   * CALIBRATED TO REAL UK FIGURES, and the first cut was not.
+   *
+   * This audience is energy people. The first version scaled both solar and demand
+   * linearly off the battery, which put a 5 kWh site on a 1.5 kWp array using 8,500 kWh a
+   * year and importing 5,700 of it. Every number was internally consistent and the whole
+   * picture was wrong: nobody with that consumption and that array is a Lumo customer,
+   * and a reader who knows the market spots it before they read the labels.
+   *
+   * A home with storage has solar sized to the roof, not to the battery, so PV gets a
+   * floor and a gentler slope: about 3.5 kWp at 5 kWh up to about 7 kWp at 20 kWh.
+   * Consumption lands at roughly 3,500 to 4,900 kWh a year, which is the right band for a
+   * solar-plus-battery household, usually one with an EV or a heat pump.
+   *
+   * SOLAR HAS TO EXCEED DEMAND on a good September day, or the battery never fills from
+   * the roof, nothing is ever exported, and the demo argues that Lumo customers buy
+   * everything from the grid.
+   */
+  const peakSolar = 0.75 + (batteryKwh / 10) * 0.45;
+  const baseLoad = 0.24 + (batteryKwh / 10) * 0.07;
 
   // Usable window. Batteries do not run to empty, and the floor is what makes an
   // evening discharge stop before the household's demand does.
@@ -237,9 +255,17 @@ function day(
     discharge = kwh(discharge);
     socKwh = Math.min(batteryKwh, Math.max(0, socKwh + charge - discharge));
 
-    // Whatever the house and the battery could not cover between them.
-    const importKwh = kwh(Math.max(0, deficit - discharge + charge - Math.min(charge, surplus)));
-    const exportKwh = kwh(Math.max(0, surplus - Math.min(charge, surplus)));
+    // Where the charge came from decides the grid figures, so it is worth naming rather
+    // than folding into one expression. Grid charging only happens when Lumo drives it;
+    // every other charge is surplus solar that would otherwise have been exported.
+    const fromGrid = state === 'forceImport' ? charge : 0;
+    const fromSolar = charge - fromGrid;
+
+    // What the house needed and neither the sun nor the battery supplied, plus anything
+    // Lumo bought to fill the battery.
+    const importKwh = kwh(Math.max(0, deficit - discharge) + fromGrid);
+    // Surplus solar that did not fit in the battery.
+    const exportKwh = kwh(surplus - fromSolar);
 
     const at = new Date(date.getTime() + slot * 30 * 60 * 1000);
 

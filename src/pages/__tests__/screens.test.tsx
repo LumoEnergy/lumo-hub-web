@@ -400,6 +400,18 @@ describe('the monitoring screen', () => {
     expect(screen.queryByRole('table')).toBeNull();
     expect(bodyText()).toMatch(/Nobody is live yet/);
   });
+
+  it('makes every site a real link, not just a clickable row', () => {
+    // These rows go to a URL, unlike the campaign rows which open a sheet. A row that
+    // navigates without an anchor cannot be tabbed to, copied, or opened in a new tab,
+    // and a screen reader does not announce it as a link.
+    mount('mid-campaign', <MonitoringPage />);
+    const rows = within(screen.getByRole('table')).getAllByRole('row').slice(1);
+    for (const row of rows) {
+      const link = within(row).getByRole('link');
+      expect(link.getAttribute('href')).toMatch(/^\/monitoring\/.+/);
+    }
+  });
 });
 
 describe('the campaign screen', () => {

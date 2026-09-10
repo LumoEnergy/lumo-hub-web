@@ -111,26 +111,38 @@ const PERSONAS = [
  */
 const ROUTES = [
   {
-    id: 'customers',
-    path: 'customers',
+    id: 'signups',
+    path: 'signups',
     // No view named, so this is also the check that the default is Invited.
-    expect: [/Customers/, /Household/, /Reward/, /Email opened/, /Households we have emailed/],
+    expect: [/Sign-ups/, /Household/, /Reward/, /Email opened/, /Households we have emailed/],
     // The column nobody understood, the status jargon, the banner that shouted about
     // money on every visit, and the undifferentiated list that used to open first.
     reject: [/Whose/, /possible match/i, /going to nobody/i, /Everyone on your list/],
   },
   {
-    id: 'customers-needs-you',
-    path: 'customers?view=attention',
+    id: 'signups-needs-you',
+    path: 'signups?view=attention',
     expect: [/What to do/, /Add an email address/, /already earned and going to nobody/],
     reject: [/Whose/],
   },
   {
-    id: 'customers-active',
+    // The retired URL. A link to it lives in slide decks and browser histories, and the
+    // whole argument for the split is that this one view was an operations question, so
+    // it has to land on the operations screen rather than back on the campaign.
+    id: 'retired customers URL',
     path: 'customers?view=active',
-    expect: [/Inverter/, /Control/, /Live for/],
-    // A reward clock that has not begun is "Not started", not a missing value.
-    reject: [/state of charge/i, /not given/],
+    expect: [/Monitoring/, /Your fleet/],
+    // Content only the campaign screen renders. A reject on the screen NAME would match
+    // the nav, which is on every page, and fail a redirect that actually worked.
+    reject: [/Email opened/, /Households we have emailed/],
+  },
+  {
+    id: 'monitoring',
+    path: 'monitoring',
+    expect: [/Monitoring/, /Your fleet/, /Inverter/, /Control/, /Live for/],
+    // A reward clock that has not begun is "Not started", not a missing value. And there
+    // is no fleet-wide energy total, because nobody decides anything with one.
+    reject: [/not given/, /kWh (generated|used|total)/i],
   },
   {
     id: 'campaign',
@@ -223,14 +235,60 @@ async function renderedText(url) {
     .replace(/&pound;/g, '£')
     .replace(/\s+/g, ' ')
     .trim();
-  return { text, bytes: inner.length };
+  return { text, html: inner, bytes: inner.length };
 }
 
 let failed = false;
 
+/**
+ * A site detail page, found by reading the fleet list rather than hardcoded.
+ *
+ * The site ids come from the fixtures, so a literal one here would be a copy that goes
+ * stale silently: the fixtures get regenerated, the id no longer resolves, the page
+ * renders its "no live site here" fallback, and the check fails looking like the deploy
+ * broke. Reading the first link off the list keeps the two in step, and it also proves
+ * the rows are real links, which is the thing that makes the page reachable by keyboard.
+ */
+async function discoverSitePath() {
+  const url = `${origin}${base}monitoring?p=mid-campaign&guide=off`;
+  const { html } = await renderedText(url);
+  const match = html.match(new RegExp(`href="${base}monitoring/([^"?#]+)"`));
+  if (!match) return null;
+  return `monitoring/${match[1]}`;
+}
+
+const sitePath = await discoverSitePath();
+if (!sitePath) {
+  console.error('smoke: no site link found on /monitoring, so the site page was NOT checked.');
+  console.error('       Either the fleet list is empty or its rows are no longer links.');
+  process.exit(1);
+}
+
+const SITE_CHECK = {
+  id: 'site detail',
+  path: sitePath,
+  expect: [
+    /Solar and demand/,
+    /Battery/,
+    /Grid and prices/,
+    /Buying from/,
+    /Lumo control/,
+    /Totals/,
+    // The window control stops at a week because that is Firestore's half-hourly
+    // retention, and the screen says so rather than leaving it to be asked on a call.
+    /kept for a week/,
+    // Never let generated telemetry pass as measured.
+    /generated to show the shape of the data/,
+  ],
+  // The household's bill is not the installer's to quote, which is the one part of the
+  // ops console telemetry card this screen deliberately does not copy.
+  reject: [/savings/i, /net cost/i, /Month/],
+};
+
 const CHECKS = [
   ...PERSONAS.map((p) => ({ ...p, persona: p.id, name: `persona ${p.id}` })),
   ...ROUTES.map((r) => ({ ...r, persona: 'mid-campaign', name: `route /${r.path}` })),
+  { ...SITE_CHECK, persona: 'mid-campaign', name: 'route /monitoring/<site>' },
 ];
 
 for (const check of CHECKS) {

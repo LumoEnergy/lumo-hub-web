@@ -63,6 +63,27 @@ describe('the telemetry fixture', () => {
     }
   });
 
+  it('balances energy in every half hour', () => {
+    // The other invariant a reader can catch. Solar plus import plus discharge has to
+    // equal consumption plus export plus charge, or the three charts contradict each
+    // other and someone adding up the totals bar finds it.
+    for (const row of series('site-a', 10, 3)) {
+      const into = row.generationKwh + row.importKwh + row.dischargeKwh;
+      const outOf = row.consumptionKwh + row.exportKwh + row.chargeKwh;
+      expect(Math.abs(into - outOf)).toBeLessThan(0.01);
+    }
+  });
+
+  it('only buys from the grid to fill the battery when Lumo is driving it', () => {
+    // Solar charging must not show up as import. That would make a self-sufficient
+    // afternoon look like a grid-dependent one, which is the opposite of the argument.
+    for (const row of series('site-a', 10, 1)) {
+      if (row.deviceState === 'loadMatch' && row.generationKwh > row.consumptionKwh) {
+        expect(row.importKwh).toBe(0);
+      }
+    }
+  });
+
   it('never charges and discharges in the same half hour', () => {
     for (const row of series('site-a', 10, 3)) {
       expect(row.chargeKwh === 0 || row.dischargeKwh === 0).toBe(true);

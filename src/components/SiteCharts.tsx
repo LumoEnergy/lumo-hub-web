@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { ChartData, ChartOptions } from 'chart.js';
 import { Chart, chartTheme } from './Chart';
 import type { ChartBand } from './Chart';
-import { controlBands, totals } from '../fixtures/telemetry';
+import { SLOTS_PER_DAY, controlBands, totals } from '../fixtures/telemetry';
 import type { Band, HalfHour } from '../fixtures/telemetry';
 import { Panel } from './ui';
 
@@ -44,34 +44,43 @@ const BAND_FILL: Record<Band['state'], string> = {
 const CHART_HEIGHT = 240;
 
 /**
- * Tick labels.
+ * Tick labels, at a density the chart is actually wide enough for.
  *
- * A week at half-hourly is 336 points, and 336 labels is a grey smear. Chart.js can
- * thin them, but only by count, which lands ticks at 03:20 and other times that never
- * existed. Labelling only midnight and midday and letting the rest render blank keeps
- * the ticks on times a person recognises.
+ * A week at half-hourly is 336 points and 336 labels is a grey smear, so most slots get
+ * no label. Chart.js can thin them itself, but only by count, which lands ticks at 03:20
+ * and other times that never existed. This keeps them on times a person recognises.
+ *
+ * THE STRIDE IS DECIDED FROM THE RENDERED WIDTH, not from a breakpoint guessed at render
+ * time. Every-two-hours fits a 700px panel and collides into an unreadable smudge in a
+ * 340px one, which is what the phone showed: axis labels drawn on top of each other look
+ * like a broken chart rather than a dense one. Doing it in the tick callback means the
+ * scale re-decides on resize and rotate, which a value captured at render cannot.
  */
-function labels(rows: readonly HalfHour[], days: number): string[] {
-  return rows.map((row, i) => {
-    const slot = i % 48;
-    if (days === 1) return slot % 4 === 0 ? row.periodStartLocal.slice(11, 16) : '';
-    if (slot === 0) {
-      return new Date(row.periodStartUtc).toLocaleDateString('en-GB', {
-        weekday: 'short',
-        timeZone: 'UTC',
-      });
-    }
-    return slot === 24 ? '12:00' : '';
-  });
+function tickStride(width: number, days: number): number {
+  if (days === 1) return width < 520 ? 12 : 4;
+  // Multi-day: a weekday name per midnight, plus noon only when there is room.
+  return width < 520 ? SLOTS_PER_DAY : SLOTS_PER_DAY / 2;
 }
 
-function baseOptions(rows: readonly HalfHour[], bands: readonly ChartBand[]): ChartOptions {
+function tickLabel(rows: readonly HalfHour[], index: number, days: number): string {
+  const row = rows[index];
+  if (!row) return '';
+  if (days === 1) return row.periodStartLocal.slice(11, 16);
+  return index % SLOTS_PER_DAY === 0
+    ? new Date(row.periodStartUtc).toLocaleDateString('en-GB', {
+        weekday: 'short',
+        timeZone: 'UTC',
+      })
+    : '12:00';
+}
+
+function baseOptions(rows: readonly HalfHour[], bands: readonly ChartBand[], days: number) {
   const t = chartTheme();
 
   return {
     responsive: true,
     maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
+    interaction: { mode: 'index' as const, intersect: false },
     hubBands: bands,
     plugins: {
       legend: { display: false },
@@ -95,16 +104,27 @@ function baseOptions(rows: readonly HalfHour[], bands: readonly ChartBand[]): Ch
     scales: {
       x: {
         grid: { display: false },
-        ticks: { color: t.mute, autoSkip: false, maxRotation: 0 },
+        ticks: {
+          color: t.mute,
+          autoSkip: false,
+          maxRotation: 0,
+          callback(this: { chart: { width: number } }, _value: unknown, index: number) {
+            return index % tickStride(this.chart.width, days) === 0
+              ? tickLabel(rows, index, days)
+              : '';
+          },
+        },
         border: { color: t.line },
       },
+      // No axis title. The panel meta already states the unit, and a rotated "kWh" eats
+      // horizontal space the phone does not have to spare.
       y: {
         grid: { color: t.line },
         ticks: { color: t.mute },
         border: { display: false },
       },
     },
-  } as ChartOptions;
+  };
 }
 
 /** Right-hand axis, for the two series that are not in kWh. */
@@ -121,7 +141,9 @@ const rightAxis = (unit: string, min?: number, max?: number) => {
 };
 
 export function SiteCharts({ rows, days }: { rows: readonly HalfHour[]; days: number }) {
-  const x = useMemo(() => labels(rows, days), [rows, days]);
+  // Chart.js needs one label per point to size the category scale. What each tick
+  // actually displays is decided by the callback in `baseOptions`, from the real width.
+  const x = useMemo(() => rows.map((_, i) => String(i)), [rows]);
 
   const bands = useMemo<readonly ChartBand[]>(
     () =>
@@ -160,21 +182,11 @@ export function SiteCharts({ rows, days }: { rows: readonly HalfHour[]; days: nu
         },
       ],
     };
-    const options = {
-      ...baseOptions(rows, bands),
-      scales: {
-        ...baseOptions(rows, bands).scales,
-        y: {
-          ...(baseOptions(rows, bands).scales as Record<string, unknown>).y as object,
-          title: { display: true, text: 'kWh', color: chartTheme().mute },
-        },
-      },
-    } as ChartOptions;
-    return { data, options };
-  }, [rows, x, bands]);
+    return { data, options: baseOptions(rows, bands, days) as ChartOptions };
+  }, [rows, x, bands, days]);
 
   const battery = useMemo(() => {
-    const base = baseOptions(rows, bands);
+    const base = baseOptions(rows, bands, days);
     const data: ChartData = {
       labels: x,
       datasets: [
@@ -212,20 +224,13 @@ export function SiteCharts({ rows, days }: { rows: readonly HalfHour[]; days: nu
     };
     const options = {
       ...base,
-      scales: {
-        ...base.scales,
-        y: {
-          ...((base.scales as Record<string, unknown>).y as object),
-          title: { display: true, text: 'kWh', color: chartTheme().mute },
-        },
-        y1: rightAxis('%', 0, 100),
-      },
+      scales: { ...base.scales, y1: rightAxis('%', 0, 100) },
     } as ChartOptions;
     return { data, options };
-  }, [rows, x, bands]);
+  }, [rows, x, bands, days]);
 
   const grid = useMemo(() => {
-    const base = baseOptions(rows, bands);
+    const base = baseOptions(rows, bands, days);
     const data: ChartData = {
       labels: x,
       datasets: [
@@ -264,17 +269,10 @@ export function SiteCharts({ rows, days }: { rows: readonly HalfHour[]; days: nu
     };
     const options = {
       ...base,
-      scales: {
-        ...base.scales,
-        y: {
-          ...((base.scales as Record<string, unknown>).y as object),
-          title: { display: true, text: 'kWh', color: chartTheme().mute },
-        },
-        y1: rightAxis('p'),
-      },
+      scales: { ...base.scales, y1: rightAxis('p') },
     } as ChartOptions;
     return { data, options };
-  }, [rows, x, bands]);
+  }, [rows, x, bands, days]);
 
   const sums = useMemo(() => totals(rows), [rows]);
   const driven = bands.length > 0;
@@ -338,8 +336,8 @@ export function SiteCharts({ rows, days }: { rows: readonly HalfHour[]; days: nu
               style={{ background: 'rgba(12, 101, 96, 0.18)' }}
               aria-hidden="true"
             />
-            Shaded hours are Lumo driving the battery, charging when power is cheapest
-            and covering the evening peak.
+            Shaded hours are Lumo driving the battery: charging when power is cheapest,
+            then discharging through the evening peak.
           </p>
         ) : null}
       </Panel>
