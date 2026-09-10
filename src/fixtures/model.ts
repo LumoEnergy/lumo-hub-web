@@ -388,6 +388,95 @@ export const fieldsWithNoProducer = (): readonly (keyof HubCustomer)[] =>
     (k) => CUSTOMER_FIELD_PROVENANCE[k].source === 'no-producer',
   );
 
+/**
+ * What is known about a live SITE, as opposed to a household on a list.
+ *
+ * A SEPARATE ENTITY ON PURPOSE, not five more nullable fields on `HubCustomer`. These
+ * facts do not exist until a household signs up and links their inverter, and they come
+ * from a different producer: `HubCustomer` is what the installer's CSV said, this is
+ * what the platform discovered. In production they are two Firestore documents,
+ * `webapp_sites` and the imported row, and collapsing them here would hide the fact
+ * that the installer supplies the first and Lumo supplies the second.
+ *
+ * EVERY FIELD HERE ALREADY EXISTS IN PRODUCTION. This block is the reason the site
+ * detail card can be richer than the campaign row without inventing anything: the ops
+ * console reads exactly these off `webapp_sites` today, under `hardware`, `tariff` and
+ * `control`. What is missing is not the data, it is an installer-scoped way to read it,
+ * which is `installer_site_visibility` in the producer gap register.
+ *
+ * The field list is deliberately the one the ops console already shrank for a
+ * non-engineer audience, in `site-pane.js`: inverter, battery, solar estimate, both
+ * tariffs and control. Someone has already made the editorial call about what a
+ * presentation view needs, and repeating it is cheaper than relitigating it.
+ */
+export interface HubSiteFacts {
+  readonly inverterMake: string | null;
+  readonly inverterModel: string | null;
+  readonly batteryCapacityKwh: number | null;
+  /** How the capacity was established. An estimate and a reading are not the same fact. */
+  readonly batterySource: 'enode' | 'estimate' | 'manual';
+  readonly solarAnnualGenerationKwh: number | null;
+  readonly importSupplier: string | null;
+  readonly importTariffName: string | null;
+  readonly exportSupplier: string | null;
+  readonly exportRateIncVat: number | null;
+  /** Whether Lumo is controlling the battery right now. */
+  readonly controlOn: boolean;
+  readonly controlMode: string | null;
+  readonly linkedSince: string | null;
+}
+
+export const SITE_FIELD_PROVENANCE: Readonly<Record<keyof HubSiteFacts, Provenance>> = {
+  inverterMake: {
+    source: 'platform-today',
+    note: 'From Enode once the household links their inverter. The installer list may also carry a make, and where the two disagree the linked device wins: it is the one Lumo can actually talk to.',
+  },
+  inverterModel: {
+    source: 'platform-today',
+    note: 'From Enode. Absent for some vendors, so it renders as a make on its own rather than as an empty second line.',
+  },
+  batteryCapacityKwh: {
+    source: 'platform-today',
+    note: 'From Enode where the device reports it. Load-bearing commercially, because the household grid reward is banded by battery size.',
+  },
+  batterySource: {
+    source: 'platform-today',
+    note: 'Whether the capacity was read from the device, estimated, or set by hand. Shown because an estimated capacity feeding a banded reward is a thing an installer should be able to see and query.',
+  },
+  solarAnnualGenerationKwh: {
+    source: 'platform-today',
+    note: 'An annual estimate held on the site record, not a measurement. Labelled as an estimate on screen for that reason.',
+  },
+  importSupplier: {
+    source: 'platform-today',
+    note: 'From the tariff the household sets during onboarding. Absent until they do, which is the No tariff set activation state.',
+  },
+  importTariffName: {
+    source: 'platform-today',
+    note: 'Same source. Worth showing to an installer because a household on a flat tariff has far less to gain, and that is a conversation the installer is better placed to have than Lumo.',
+  },
+  exportSupplier: {
+    source: 'platform-today',
+    note: 'Same source. Often unset, because export is arranged separately from import and frequently never is.',
+  },
+  exportRateIncVat: {
+    source: 'platform-today',
+    note: 'Pence per kWh including VAT. Shown as a rate rather than as a projected income, which would be a forecast.',
+  },
+  controlOn: {
+    source: 'platform-today',
+    note: 'Whether Smart Control is currently active. The single most useful fact on this screen, and the one the fleet list sorts on.',
+  },
+  controlMode: {
+    source: 'platform-today',
+    note: 'Which control strategy is running. Shown as a plain-language line rather than the internal enum.',
+  },
+  linkedSince: {
+    source: 'platform-today',
+    note: 'When the device link last completed. Distinct from when the household signed up, and the difference is usually where a stalled onboarding is hiding.',
+  },
+};
+
 /** The current user's seat. Every persona has exactly one. */
 export const currentSeat = (company: HubCompany): HubSeat =>
   company.seats.find((s) => s.isCurrentUser) ?? company.seats[0];

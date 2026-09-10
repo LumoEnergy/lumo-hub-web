@@ -12,16 +12,19 @@ export type {
   Attestation,
   Provenance,
   ProvenanceSource,
+  HubSiteFacts,
 } from './model';
 export {
   CUSTOMER_FIELD_PROVENANCE,
   COMPANY_FIELD_PROVENANCE,
+  SITE_FIELD_PROVENANCE,
   displayName,
   fieldsWithNoProducer,
   currentSeat,
   canSend,
 } from './model';
 export { PERSONAS, PERSONA_IDS, DEFAULT_PERSONA, materialise } from './personas';
+export { siteFacts } from './sites';
 
 /**
  * Today, as an ISO date, in Europe/London.

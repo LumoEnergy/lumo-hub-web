@@ -128,6 +128,18 @@ export const PRODUCER_GAPS: readonly ProducerGap[] = [
       'The estate has one transactional sending identity and one template. Sending thousands of campaign emails from it would put every installer’s campaign and the app’s own mail behind the same reputation.',
     blocksRealBuild: false,
   },
+  {
+    id: 'installer_site_visibility',
+    concept: 'A lawful, authorised way for an installer to see a household’s telemetry',
+    statesAffected: ['signed_up', 'Smart Control Active', 'confirmed', 'paid'],
+    whyMissing:
+      'The data exists and the permission does not. Half-hourly telemetry is already written per site to Firestore at webapp_site_data/{siteId} and already rendered as charts by the household’s own app, so the pipeline this screen needs is built. What is missing is any concept of a third party reading it: the document is scoped to the household that owns the site, and there is no installer identity to scope it to instead.',
+    whatTheRealBuildMustCreate:
+      'Two things, and the second is the hard one. First, an installer-scoped read path: the document is one per site, so a firm with several hundred live households cannot fan out hundreds of client reads, and this wants a server-side aggregate or a per-installer projection. Second, a lawful basis. Half-hourly consumption reveals when a house is empty, when people go to bed and when they go on holiday, which makes it a materially more sensitive disclosure than a name and an email. The contact attestation does not cover it: agreeing to be told about a product is not agreeing to have your electricity use shown to a contractor indefinitely. This needs its own consent, captured from the household rather than asserted by the installer, revocable, and probably narrower than the full series.',
+    evidence:
+      'The ops console reads webapp_site_data and webapp_sites directly with staff credentials, which is the only access pattern that exists today. Nothing in the estate has ever exposed one party’s energy data to another party, and Firestore rules currently deny it.',
+    blocksRealBuild: true,
+  },
 ];
 
 export const producerGapsFor = (stateId: string): readonly ProducerGap[] =>

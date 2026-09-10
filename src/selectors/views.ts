@@ -3,16 +3,18 @@ import type { ContactStateId } from '../state';
 import type { CustomerRow } from './customers';
 
 /**
- * FOUR VIEWS OF ONE LIST, each answering a different question.
+ * THREE VIEWS OF ONE LIST, each answering a different question.
  *
  * The previous four filters were a workload cut: all, needs you, earning, not
  * emailed. That is one question asked four ways. These are separate questions a firm
  * actually arrives with, and because each has a different question it gets a
  * different set of columns rather than the same table filtered.
  *
- * That is the change that makes the screen usable. A campaign row wants a status and
- * a date; a live household wants its kit, its control health and its reward clock.
- * One column set covering both means every row carries four empty cells.
+ * THERE WAS A FOURTH VIEW, `active`, AND IT WAS ON THE WRONG SCREEN. It listed live
+ * households with their battery, inverter and control health, which is not a campaign
+ * question at all: it is read on a different schedule, by a different person, off
+ * telemetry rather than email events. It is now the Monitoring screen. What is left
+ * here is only the campaign, and `liveRows` below is the seam between the two.
  *
  * THERE IS NO "ALL", AND IT OPENS ON INVITED. An 808-row undifferentiated list is the
  * least useful thing this screen can show: it is the state of the whole book averaged
@@ -25,7 +27,7 @@ import type { CustomerRow } from './customers';
  * quietly strand a household in a view nobody can open.
  */
 
-export type ViewId = 'invited' | 'waiting' | 'attention' | 'active';
+export type ViewId = 'invited' | 'waiting' | 'attention';
 
 /** Opened when no view is named. Invited, not the whole book. */
 export const DEFAULT_VIEW: ViewId = 'invited';
@@ -45,7 +47,6 @@ export const VIEWS: readonly ViewDefinition[] = [
     blurb: 'Still to go out, and when we plan to send.',
   },
   { id: 'attention', label: 'Needs you', blurb: 'Four jobs only you can do.' },
-  { id: 'active', label: 'Active', blurb: 'Live on Lumo. Kit, control health and reward.' },
 ];
 
 /** Contact states that mean an email actually went. */
@@ -122,16 +123,29 @@ export function rowsForView(
       );
     case 'attention':
       return needsYou(rows);
-    case 'active':
-      // Live on Lumo, including the ones that are not working. A monitoring view
-      // that hides the broken ones is a monitoring view nobody can use.
-      return rows.filter((row) => row.customer.contact === 'signed_up');
     case 'invited':
     default:
       return rows.filter((row) =>
         (EMAILED_STATES as readonly string[]).includes(row.customer.contact),
       );
   }
+}
+
+/**
+ * The households the Monitoring screen is about.
+ *
+ * NOT a fourth bucket in the Sign-ups partition. `signed_up` sits in `EMAILED_STATES`,
+ * so these households are still on Invited, where they belong: we emailed them and
+ * they joined. Monitoring is a second lens over a subset, not a slice taken out of the
+ * campaign, and `views.test.ts` asserts the subset relation so the two screens cannot
+ * end up disagreeing about who is live.
+ *
+ * INCLUDES THE BROKEN ONES. A monitoring view that quietly drops the households whose
+ * battery is offline is the one view guaranteed to be useless, because those are the
+ * only rows anyone opens it for.
+ */
+export function liveRows(rows: readonly CustomerRow[]): readonly CustomerRow[] {
+  return rows.filter((row) => row.customer.contact === 'signed_up');
 }
 
 export const isViewId = (value: string | null): value is ViewId =>

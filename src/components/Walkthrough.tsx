@@ -106,17 +106,20 @@ function walkthroughSteps(companyName: string): readonly Step[] {
     },
     {
       id: 'live',
-      title: 'Then it keeps working',
+      title: 'Then you can watch it work',
       body: (
         <>
           <p>
-            Once a household is live you can see their battery, their kit and whether Lumo is
-            controlling it. If one drops off or needs relinking, we flag it to you.
+            Once a household is live, Monitoring shows their kit, their solar and battery
+            through the day, and the hours Lumo is charging them cheaply.
           </p>
-          <p>Rewards are paid to {companyName} monthly.</p>
+          <p>
+            If a battery drops off or needs relinking we flag it to you. Rewards are paid to{' '}
+            {companyName} monthly.
+          </p>
         </>
       ),
-      spot: { nav: 0, block: 1, caption: 'Dashboard, live customers' },
+      spot: { nav: 3, block: 1, caption: 'Monitoring, your live sites' },
     },
   ];
 }
@@ -254,8 +257,12 @@ function Hero() {
 }
 
 interface Spot {
-  /** Which nav item this step happens on. 0 Dashboard, 1 Customers, 2 Campaign. */
-  readonly nav: 0 | 1 | 2;
+  /**
+   * Which nav item this step happens on: 0 Dashboard, 1 Sign-ups, 2 Campaign setup,
+   * 3 Monitoring. Kept in step with `NAV` in Shell.tsx, and `walkthrough.test.tsx`
+   * asserts the count matches so a fifth tab cannot leave this pointing at nothing.
+   */
+  readonly nav: 0 | 1 | 2 | 3;
   /** Which content panel to ring. 0 is top left, 1 is top right. */
   readonly block: 0 | 1;
   readonly caption: string;
@@ -275,6 +282,14 @@ interface Spot {
  * first cut did, loses the which-tab half of the point and quietly implies the upload
  * is on whichever screen you happen to be on.
  */
+/**
+ * One entry per real nav destination, in nav order.
+ *
+ * Declared once and used by both the sidebar and the tab bar, because two hardcoded
+ * ranges are how the wireframe ends up with three tabs on desktop and four on mobile.
+ */
+const NAV_SLOTS = [0, 1, 2, 3] as const;
+
 function MiniScreen({ spot }: { spot: Spot }) {
   const ring = 'ring-2 ring-accent ring-offset-2 ring-offset-surface';
   const pill = (n: number) =>
@@ -289,7 +304,7 @@ function MiniScreen({ spot }: { spot: Spot }) {
             <div className="h-2 w-8 rounded-full bg-line-strong" />
             <div className="h-1.5 w-6 rounded-full bg-line" />
             <div className="pt-1.5" />
-            {[0, 1, 2].map((n) => (
+            {NAV_SLOTS.map((n) => (
               <div key={n} className={`h-2.5 ${pill(n)}`} />
             ))}
           </div>
@@ -321,7 +336,7 @@ function MiniScreen({ spot }: { spot: Spot }) {
 
         {/* Bottom tab bar, phone only. */}
         <div className="mt-2 flex gap-2 rounded-[6px] bg-surface p-1.5 sm:hidden">
-          {[0, 1, 2].map((n) => (
+          {NAV_SLOTS.map((n) => (
             <div key={n} className={`h-2.5 flex-1 ${pill(n)}`} />
           ))}
         </div>

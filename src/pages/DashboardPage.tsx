@@ -102,7 +102,7 @@ export function DashboardPage() {
               <FleetStrip fleet={fleet} />
               <div className="mt-4">
                 <Link
-                  to="customers?view=active"
+                  to="monitoring"
                   className="text-[13px] font-semibold text-accent hover:underline"
                 >
                   Monitor them
@@ -147,7 +147,7 @@ export function DashboardPage() {
                 clicked and stopped. Everything else is running.
               </p>
               <div className="mt-3">
-                <Link to="customers?view=attention">
+                <Link to="signups?view=attention">
                   <Button variant="secondary">See what needs you</Button>
                 </Link>
               </div>
@@ -199,7 +199,7 @@ function MoneyRow({
           run
         </p>
         <Link
-          to="customers?view=active"
+          to="monitoring"
           className="text-[13px] font-semibold text-accent hover:underline"
         >
           See who

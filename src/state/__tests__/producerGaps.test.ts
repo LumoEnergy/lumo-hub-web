@@ -21,6 +21,7 @@ describe('the producer-gap register', () => {
       'installer_company_entity',
       'contact_permission',
       'sender_identity',
+      'installer_site_visibility',
     ]);
   });
 

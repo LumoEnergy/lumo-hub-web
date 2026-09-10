@@ -4,20 +4,29 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import type { PersonaId } from '../../fixtures';
+import { loadPersona } from '../../fixtures';
+import { buildRows } from '../../selectors/customers';
+import { liveRows } from '../../selectors/views';
 import { DemoStoreProvider } from '../../store/DemoStore';
 import { DashboardPage } from '../DashboardPage';
-import { CustomersPage } from '../CustomersPage';
+import { SignupsPage } from '../SignupsPage';
+import { MonitoringPage } from '../MonitoringPage';
+import { SitePage } from '../SitePage';
 import { CampaignPage } from '../CampaignPage';
 import { SettingsPage } from '../SettingsPage';
 
 afterEach(cleanup);
 
-const mount = (persona: PersonaId, element: ReactElement, route = '/') =>
+/**
+ * `pattern` exists for the one screen that reads a route parameter. Everything else
+ * mounts under a catch-all, and `useParams` returns nothing under a catch-all.
+ */
+const mount = (persona: PersonaId, element: ReactElement, route = '/', pattern = '*') =>
   render(
     <MemoryRouter initialEntries={[route]}>
       <DemoStoreProvider personaId={persona}>
         <Routes>
-          <Route path="*" element={element} />
+          <Route path={pattern} element={element} />
         </Routes>
       </DemoStoreProvider>
     </MemoryRouter>,
@@ -147,26 +156,29 @@ describe('the dashboard', () => {
   });
 });
 
-describe('the customers screen', () => {
+describe('the sign-ups screen', () => {
   it('leads with the company, never a person', () => {
-    mount('mid-campaign', <CustomersPage />);
-    expect(screen.getByRole('heading', { name: /Customers/ })).toBeTruthy();
+    mount('mid-campaign', <SignupsPage />);
+    expect(screen.getByRole('heading', { name: /Sign-ups/ })).toBeTruthy();
     expect(bodyText()).not.toMatch(/your link|personal link|QR/i);
   });
 
-  it('offers four views and no undifferentiated list', () => {
+  it('offers three campaign views and no undifferentiated list', () => {
     // "All" was 808 rows of averaged book that opened on the 322 households nothing
     // had happened to yet. Invited is where the campaign actually is.
-    mount('mid-campaign', <CustomersPage />);
+    //
+    // There is no Active tab. Live households are an operations question, not a campaign
+    // one, and they have their own screen.
+    mount('mid-campaign', <SignupsPage />);
     const group = screen.getByRole('group', { name: 'Which customers' });
     const labels = within(group)
       .getAllByRole('button')
       .map((b) => b.textContent?.replace(/\d+$/, '').trim());
-    expect(labels).toEqual(['Invited', 'Not yet contacted', 'Needs you', 'Active']);
+    expect(labels).toEqual(['Invited', 'Not yet contacted', 'Needs you']);
   });
 
   it('opens on Invited when no view is named', () => {
-    mount('mid-campaign', <CustomersPage />);
+    mount('mid-campaign', <SignupsPage />);
     const pressed = screen
       .getAllByRole('button', { pressed: true })
       .map((b) => b.textContent?.replace(/\d+$/, '').trim());
@@ -179,35 +191,34 @@ describe('the customers screen', () => {
         .getAllByRole('columnheader')
         .map((h) => h.textContent?.trim().replace(/[\u2191\u2193\u2195]/g, ''));
 
-    mount('mid-campaign', <CustomersPage />);
+    mount('mid-campaign', <SignupsPage />);
     expect(headers()).toEqual(['Household', 'Status', 'Emailed', 'Reward', 'Open']);
 
     cleanup();
-    mount('mid-campaign', <CustomersPage />, '/?view=waiting');
+    mount('mid-campaign', <SignupsPage />, '/?view=waiting');
     expect(headers()).toEqual(['Household', 'Status', 'Scheduled send', 'Open']);
 
     cleanup();
-    mount('mid-campaign', <CustomersPage />, '/?view=attention');
+    mount('mid-campaign', <SignupsPage />, '/?view=attention');
     expect(headers()).toEqual(['Household', 'Status', 'Waiting', 'What to do', 'Open']);
+  });
 
-    cleanup();
-    mount('mid-campaign', <CustomersPage />, '/?view=active');
-    expect(headers()).toEqual([
-      'Household',
-      'Battery',
-      'Inverter',
-      'Control',
-      'Live for',
-      'Reward',
-      'Open',
-    ]);
+  it('falls back to Invited for the retired active view rather than rendering nothing', () => {
+    // A link to `?view=active` may be in someone's history or a slide deck. It is not a
+    // campaign view any more, so an unknown value has to degrade to the default rather
+    // than render an empty table.
+    mount('mid-campaign', <SignupsPage />, '/?view=active');
+    const pressed = screen
+      .getAllByRole('button', { pressed: true })
+      .map((b) => b.textContent?.replace(/\d+$/, '').trim());
+    expect(pressed).toEqual(['Invited']);
   });
 
   it('never drops a column at a narrow width', () => {
     // The first version hid the age column below 1280px, which took its heading with
     // it and read as a broken table rather than as a responsive one. Every column is
     // always present and the container scrolls instead.
-    mount('mid-campaign', <CustomersPage />);
+    mount('mid-campaign', <SignupsPage />);
     const table = screen.getByRole('table');
     for (const cell of within(table).getAllByRole('columnheader')) {
       expect(cell.className, cell.textContent ?? '').not.toMatch(/hidden/);
@@ -221,22 +232,22 @@ describe('the customers screen', () => {
     // Status is one thing now: where this household has got to. The match track still
     // decides what lands in Needs you, it just does not get a label in a cell.
     const banned = /possible match|not credited to you|Interested, not signed up/i;
-    for (const view of ['all', 'invited', 'attention', 'active'] as const) {
+    for (const view of ['all', 'invited', 'attention'] as const) {
       cleanup();
-      mount('mid-campaign', <CustomersPage />, `/?view=${view}`);
+      mount('mid-campaign', <SignupsPage />, `/?view=${view}`);
       expect(screen.getByRole('table').textContent ?? '', view).not.toMatch(banned);
     }
   });
 
   it('uses the words an installer already owns for each stage', () => {
-    mount('mid-campaign', <CustomersPage />, '/?view=invited');
+    mount('mid-campaign', <SignupsPage />, '/?view=invited');
     const text = screen.getByRole('table').textContent ?? '';
     expect(text).toMatch(/Email opened/);
     expect(text).toMatch(/Clicked through/);
   });
 
   it('has no owner column, because nobody knew what it meant', () => {
-    mount('mid-campaign', <CustomersPage />);
+    mount('mid-campaign', <SignupsPage />);
     const table = screen.getByRole('table');
     expect(table.textContent).not.toMatch(/Whose/);
     expect(within(table).queryByText('The household')).toBeNull();
@@ -246,9 +257,9 @@ describe('the customers screen', () => {
     // "£100 of yours is going to nobody" was true and was the loudest thing on the
     // screen even when you came to look at something else. It is rows in Needs you
     // with an instruction beside them now.
-    for (const view of ['all', 'invited', 'waiting', 'active'] as const) {
+    for (const view of ['all', 'invited', 'waiting'] as const) {
       cleanup();
-      mount('mid-campaign', <CustomersPage />, `/?view=${view}`);
+      mount('mid-campaign', <SignupsPage />, `/?view=${view}`);
       expect(bodyText(), view).not.toMatch(/going to nobody/i);
     }
   });
@@ -256,12 +267,12 @@ describe('the customers screen', () => {
   it('states the unmatched total once, in the view that asks for the fix', () => {
     // The one multiplied total the spec allows: those households are live, the 30 days
     // are served, and the money exists. It belongs where someone has come to act on it.
-    mount('mid-campaign', <CustomersPage />, '/?view=attention');
+    mount('mid-campaign', <SignupsPage />, '/?view=attention');
     expect(bodyText()).toMatch(/£\d+ of it is already earned and going to nobody/);
   });
 
   it('tells the firm what to do on the only view that asks anything of them', () => {
-    mount('mid-campaign', <CustomersPage />, '/?view=attention');
+    mount('mid-campaign', <SignupsPage />, '/?view=attention');
     const text = screen.getByRole('table').textContent ?? '';
     expect(text).toMatch(/Add an email address/);
     expect(text).toMatch(/Send us a newer one/);
@@ -269,21 +280,29 @@ describe('the customers screen', () => {
   });
 
   it('gives every household still queued a real send date', () => {
-    mount('mid-campaign', <CustomersPage />, '/?view=waiting');
+    mount('mid-campaign', <SignupsPage />, '/?view=waiting');
     const text = screen.getByRole('table').textContent ?? '';
     expect(text).toMatch(/Not emailed yet/);
     expect(text).toMatch(/\d{1,2} [A-Z][a-z]{2}/);
   });
 
-  it('shows the kit and the control health on the active view', () => {
-    mount('mid-campaign', <CustomersPage />, '/?view=active');
-    const text = screen.getByRole('table').textContent ?? '';
-    expect(text).toMatch(/kWh/);
-    expect(text).toMatch(/Running/);
+  it('keeps the kit and control health off the campaign screen entirely', () => {
+    // These belong to Monitoring now. A battery column on a campaign row was empty for
+    // every household that had not signed up, which was most of them.
+    for (const view of ['invited', 'waiting', 'attention'] as const) {
+      cleanup();
+      mount('mid-campaign', <SignupsPage />, `/?view=${view}`);
+      const headers = within(screen.getByRole('table'))
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent?.trim());
+      expect(headers, view).not.toContain('Battery');
+      expect(headers, view).not.toContain('Inverter');
+      expect(headers, view).not.toContain('Control');
+    }
   });
 
   it('opens on the right view when the dashboard sends you there', () => {
-    mount('mid-campaign', <CustomersPage />, '/?view=attention');
+    mount('mid-campaign', <SignupsPage />, '/?view=attention');
     const group = screen.getByRole('group', { name: 'Which customers' });
     const pressed = within(group)
       .getAllByRole('button')
@@ -293,7 +312,7 @@ describe('the customers screen', () => {
   });
 
   it('caps the rendered rows and says so rather than truncating quietly', () => {
-    mount('mid-campaign', <CustomersPage />);
+    mount('mid-campaign', <SignupsPage />);
     const rows = within(screen.getByRole('table')).getAllByRole('row');
     // 150 body rows plus the header.
     expect(rows.length).toBe(151);
@@ -304,7 +323,7 @@ describe('the customers screen', () => {
     // One sign-off releases the whole list, so it belongs on the dashboard and the
     // campaign screen, not stamped on every household as an individual task. What is
     // legitimately here is the rows only the firm can unblock.
-    mount('awaiting-approval', <CustomersPage />, '/?view=attention');
+    mount('awaiting-approval', <SignupsPage />, '/?view=attention');
     const rows = within(screen.getByRole('table')).getAllByRole('row');
     expect(rows.length).toBe(35);
     expect(bodyText()).not.toMatch(/Approve the email/);
@@ -313,8 +332,84 @@ describe('the customers screen', () => {
   it('never forecasts, in any persona', () => {
     for (const persona of ALL_PERSONAS) {
       cleanup();
-      mount(persona, <CustomersPage />);
+      mount(persona, <SignupsPage />);
       expect(bodyText(), persona).not.toMatch(FORECAST);
+    }
+  });
+});
+
+describe('the monitoring screen', () => {
+  it('lists live sites with their kit and whether Lumo is controlling them', () => {
+    mount('mid-campaign', <MonitoringPage />);
+    expect(screen.getByRole('heading', { name: /Monitoring/ })).toBeTruthy();
+    const headers = within(screen.getByRole('table'))
+      .getAllByRole('columnheader')
+      .map((h) => h.textContent?.trim().replace(/[\u2191\u2193\u2195]/g, ''));
+    expect(headers).toEqual([
+      'Household',
+      'Control',
+      'Battery',
+      'Inverter',
+      'Live for',
+      'Reward',
+      'Open',
+    ]);
+  });
+
+  it('leads with control health, not with the battery size', () => {
+    // Control is the only column anyone ever acts on. Putting kit ahead of it made the
+    // reader scan past two columns of trivia to find the fact that decides whether they
+    // pick up the phone.
+    mount('mid-campaign', <MonitoringPage />);
+    const headers = within(screen.getByRole('table'))
+      .getAllByRole('columnheader')
+      .map((h) => h.textContent?.trim().replace(/[\u2191\u2193\u2195]/g, ''));
+    expect(headers.indexOf('Control')).toBeLessThan(headers.indexOf('Battery'));
+  });
+
+  it('lists only live households, and every one of them', () => {
+    mount('mid-campaign', <MonitoringPage />);
+    const rows = within(screen.getByRole('table')).getAllByRole('row').length - 1;
+    // The fleet roll-up and the table are the same cohort. Two numbers under one label
+    // is two correct numbers and one broken screen.
+    expect(bodyText()).toMatch(new RegExp(`${rows} on Lumo`));
+  });
+
+  it('carries no campaign columns, because the campaign is over for these households', () => {
+    mount('mid-campaign', <MonitoringPage />);
+    const headers = within(screen.getByRole('table'))
+      .getAllByRole('columnheader')
+      .map((h) => h.textContent?.trim());
+    expect(headers).not.toContain('Scheduled send');
+    expect(headers).not.toContain('Emailed');
+  });
+
+  it('quotes no fleet-wide energy total, in any persona', () => {
+    // A summed kWh across a fleet is not a number anyone decides with, and summing
+    // generated data would be the first genuinely misleading figure in the build.
+    for (const persona of ALL_PERSONAS) {
+      cleanup();
+      mount(persona, <MonitoringPage />);
+      expect(bodyText(), persona).not.toMatch(/kWh (generated|used|total)/i);
+      expect(bodyText(), persona).not.toMatch(FORECAST);
+    }
+  });
+
+  it('says nobody is live rather than showing an empty table', () => {
+    mount('awaiting-approval', <MonitoringPage />);
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(bodyText()).toMatch(/Nobody is live yet/);
+  });
+
+  it('makes every site a real link, not just a clickable row', () => {
+    // These rows go to a URL, unlike the campaign rows which open a sheet. A row that
+    // navigates without an anchor cannot be tabbed to, copied, or opened in a new tab,
+    // and a screen reader does not announce it as a link.
+    mount('mid-campaign', <MonitoringPage />);
+    const rows = within(screen.getByRole('table')).getAllByRole('row').slice(1);
+    for (const row of rows) {
+      const link = within(row).getByRole('link');
+      expect(link.getAttribute('href')).toMatch(/^\/monitoring\/.+/);
     }
   });
 });
@@ -545,5 +640,60 @@ describe('account settings', () => {
     mount('mid-campaign', <SettingsPage />);
     expect(bodyText()).not.toMatch(/sort code|account number|IBAN/i);
     expect(bodyText()).toMatch(/Bank details are set up with us once/);
+  });
+});
+
+describe('the site detail screen', () => {
+  const site = (persona: PersonaId = 'mid-campaign') => {
+    const { customers, asOf } = loadPersona(persona);
+    const live = liveRows(buildRows(customers, asOf));
+    return live[0].customer.id;
+  };
+
+  it('shows the kit, the tariff and what Lumo is doing', () => {
+    mount('mid-campaign', <SitePage />, `/${site()}`, '/:siteId');
+    expect(bodyText()).toMatch(/Inverter/);
+    expect(bodyText()).toMatch(/Battery/);
+    expect(bodyText()).toMatch(/Buying from/);
+    expect(bodyText()).toMatch(/Lumo control/);
+  });
+
+  it('draws three charts and names each one for a screen reader', () => {
+    // A canvas is opaque without a label, and three unlabelled canvases are three
+    // invisible elements.
+    mount('mid-campaign', <SitePage />, `/${site()}`, '/:siteId');
+    const labels = screen.getAllByRole('img').map((c) => c.getAttribute('aria-label'));
+    expect(labels).toHaveLength(3);
+    for (const label of labels) expect(label).toBeTruthy();
+  });
+
+  it('offers a day, three days and a week, and stops there', () => {
+    // Seven days is Firestore's half-hourly retention, not a product choice. A month
+    // option would be a control that cannot be honoured.
+    mount('mid-campaign', <SitePage />, `/${site()}`, '/:siteId');
+    const group = screen.getByRole('group', { name: 'How much history' });
+    const labels = within(group)
+      .getAllByRole('button')
+      .map((b) => b.textContent?.trim());
+    expect(labels).toEqual(['Day', '3 days', 'Week']);
+    expect(bodyText()).toMatch(/kept for a week/);
+  });
+
+  it('says the readings are generated rather than letting them pass as real', () => {
+    mount('mid-campaign', <SitePage />, `/${site()}`, '/:siteId');
+    expect(bodyText()).toMatch(/generated to show the shape of the data/);
+  });
+
+  it('quotes no savings and no bill, because neither is the installer to quote', () => {
+    mount('mid-campaign', <SitePage />, `/${site()}`, '/:siteId');
+    expect(bodyText()).not.toMatch(/savings|bill|net cost/i);
+    expect(bodyText()).not.toMatch(FORECAST);
+  });
+
+  it('sends you back to the fleet for a household that is not live', () => {
+    mount('mid-campaign', <SitePage />, '/not-a-real-site', '/:siteId');
+    expect(screen.queryByRole('img')).toBeNull();
+    expect(bodyText()).toMatch(/No live site here/);
+    expect(screen.getByRole('link', { name: /Back to your fleet/ })).toBeTruthy();
   });
 });

@@ -12,6 +12,7 @@ import {
   EMAILED_STATES,
   STALE_CLICK_DAYS,
   WAITING_STATES,
+  liveRows,
   needsYou,
   rowsForView,
   scheduledSendDates,
@@ -140,7 +141,7 @@ describe('the four views', () => {
   });
 
   it('keeps every view a proper subset, now that none of them is everybody', () => {
-    for (const view of ['invited', 'waiting', 'attention', 'active'] as const) {
+    for (const view of ['invited', 'waiting', 'attention'] as const) {
       expect(rowsForView(rows, view).length, view).toBeLessThan(rows.length);
     }
   });
@@ -154,10 +155,22 @@ describe('the four views', () => {
 
   it('shows the broken live households, not just the healthy ones', () => {
     // A monitoring view that hides the disconnected ones is a monitoring view nobody
-    // can use, which is why Active is "on the platform" rather than "earning".
-    const active = rowsForView(rows, 'active');
-    const running = active.filter((r) => r.customer.activation === 'Smart Control Active');
-    expect(active.length).toBeGreaterThan(running.length);
+    // can use, which is why the fleet is "on the platform" rather than "earning".
+    const live = liveRows(rows);
+    const running = live.filter((r) => r.customer.activation === 'Smart Control Active');
+    expect(live.length).toBeGreaterThan(running.length);
+  });
+
+  it('keeps live households on Invited too, so the split strands nobody', () => {
+    // Monitoring is a second lens over a subset of Invited, not a slice taken out of
+    // the campaign. `signed_up` is in EMAILED_STATES, so these households are still
+    // reachable from the campaign screen: we emailed them and they joined.
+    const invited = new Set(rowsForView(rows, 'invited').map((r) => r.customer.id));
+    const live = liveRows(rows);
+    expect(live.length).toBeGreaterThan(0);
+    for (const row of live) {
+      expect(invited, row.customer.id).toContain(row.customer.id);
+    }
   });
 
   it('gives every queued household a real send date and every held one none', () => {

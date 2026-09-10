@@ -14,13 +14,17 @@ import { HeldRowFixer, UnmatchedFixer } from '../components/Fixers';
 import { Button, Card, EmptyState, ScreenTitle, SegmentedToggle } from '../components/ui';
 
 /**
- * One list of customers, five ways of looking at it.
+ * The campaign, household by household. Three ways of looking at one list.
  *
- * There used to be two screens that both listed households, this one for progress
- * and an earnings screen for money, and the reader had to hold both in their head
- * and reconcile them. Money is now a column here and the earnings screen is gone.
+ * THIS SCREEN IS ONLY ABOUT THE CAMPAIGN. It used to be called Customers and carried a
+ * fourth tab, Active, listing live households with their kit and control health. That
+ * tab is now the Monitoring screen, and the split is the point: converting a back book
+ * is a sales funnel read once a week off email events, and watching live batteries is
+ * an operations job read whenever something looks wrong off telemetry. The households
+ * overlap, the question does not, and one table trying to answer both gave every row
+ * half a set of empty cells.
  *
- * THE FIVE VIEWS ARE FIVE QUESTIONS, not one list filtered four times. See
+ * THE THREE VIEWS ARE THREE QUESTIONS, not one list filtered three times. See
  * `selectors/views.ts` for what each one is for and why it gets its own columns.
  *
  * NO CALLOUTS. There was a pinned banner saying "£100 of yours is going to nobody",
@@ -44,7 +48,7 @@ import { Button, Card, EmptyState, ScreenTitle, SegmentedToggle } from '../compo
  */
 const PAGE = 150;
 
-export function CustomersPage() {
+export function SignupsPage() {
   const { customers, asOf, company } = useDemoStore();
   const [params, setParams] = useSearchParams();
   const [open, setOpen] = useState<CustomerRow | null>(null);
@@ -99,7 +103,7 @@ export function CustomersPage() {
   return (
     <>
       <ScreenTitle count={rows.length} sub={`Everyone ${company.name} handed over.`}>
-        Customers
+        Sign-ups
       </ScreenTitle>
 
       <div className="mt-4 px-4 lg:px-0">
@@ -210,10 +214,6 @@ function EmptyForView({ view, onShowInvited }: { view: ViewId; onShowInvited: ()
     attention: {
       title: 'Nothing needs you',
       body: 'No bounces, no missing addresses, nobody stalled. This is the good outcome.',
-    },
-    active: {
-      title: 'Nobody is live yet',
-      body: 'Households appear here once they have signed up and connected a battery.',
     },
   };
 
